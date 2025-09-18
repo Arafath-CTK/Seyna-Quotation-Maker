@@ -39,7 +39,6 @@ export async function GET(req: Request) {
     const filter: any = {};
     if (status) filter.status = status;
     if (q) {
-      // simple text search on customer.name or quoteNumber
       filter.$or = [
         { quoteNumber: { $regex: q, $options: 'i' } },
         { 'customer.name': { $regex: q, $options: 'i' } },
@@ -48,7 +47,14 @@ export async function GET(req: Request) {
 
     const items = await col.find(filter).sort({ createdAt: -1 }).limit(limit).toArray();
 
-    return new Response(JSON.stringify({ items }), {
+    // Normalize for frontend
+    const safeItems = items.map((doc: any) => ({
+      ...doc,
+      _id: doc._id.toString(),
+      createdAt: doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt),
+    }));
+
+    return new Response(JSON.stringify({ items: safeItems }), {
       headers: { 'content-type': 'application/json' },
     });
   } catch (e: any) {

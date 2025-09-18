@@ -829,23 +829,29 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                     </div>
 
                     {finalized && (
-                      <div className="bg-success/10 text-success border-success/20 flex items-center gap-2 rounded-xl border px-4 py-2">
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        <span className="font-medium">
-                          Quote finalized as <strong>{finalized.number}</strong>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-green-700">
+                          Finalized as <strong>{finalized.number}</strong>
                         </span>
+                        {/* Preview / Download */}
+                        {draftId && (
+                          <>
+                            <a
+                              href={`/quotes/${draftId}/preview`}
+                              className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
+                              target="_blank"
+                            >
+                              Preview
+                            </a>
+                            <a
+                              href={`/api/quotes/${draftId}/pdf`}
+                              className="rounded bg-black px-3 py-2 text-sm text-white hover:bg-gray-800"
+                              target="_blank"
+                            >
+                              Download PDF
+                            </a>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
