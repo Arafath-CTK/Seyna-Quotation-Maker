@@ -204,7 +204,60 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
 
   const saveDraft = async () => {
     if (!draftId) return;
-    const payload = valuesToPayload(initial);
+
+    // 1) Ensure any rows without productId become real products first
+    const createdMap: Record<
+      number,
+      { _id: string; name: string; defaultPrice: number; unitLabel: string }
+    > = {};
+
+    // Loop current item values (not yet converted) to capture latest inputs
+    for (let i = 0; i < (initial.items?.length || 0); i++) {
+      const it = initial.items[i] as any;
+      if (!it?.productId && it?.productName?.trim()) {
+        // if unitPrice is empty/NaN, normalize to 0; same for unitLabel
+        const defaultPrice = Number(it.unitPrice) || 0;
+        const unitLabel = (it.unitLabel || 'pcs').trim() || 'pcs';
+
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: it.productName.trim(),
+            unitLabel,
+            defaultPrice,
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d?.error || 'Create product failed');
+        }
+        const data = await res.json();
+        createdMap[i] = {
+          _id: data.id,
+          name: it.productName.trim(),
+          defaultPrice,
+          unitLabel,
+        };
+      }
+    }
+
+    // 2) Convert values for server and patch in the new productIds
+    const payload = valuesToPayload({
+      ...initial,
+      items: initial.items.map((it: any, idx: number) =>
+        createdMap[idx]
+          ? {
+              ...it,
+              productId: createdMap[idx]._id,
+              unitPrice: createdMap[idx].defaultPrice,
+              unitLabel: createdMap[idx].unitLabel,
+            }
+          : it,
+      ),
+    });
+
+    // 3) Save the quote draft
     const res = await fetch(`/api/quotes/${draftId}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -478,13 +531,16 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                       <span className="text-destructive">*</span>
                                       Product/Service
                                     </label>
-                                    <Field
-                                      name={`items.${idx}.productName`}
-                                      className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                                      placeholder="Enter product or service name"
-                                    />
-                                    <ProductQuickPick
-                                      onPick={async (p) => {
+                                    {/* Keep Formik ownership, but hide the raw input */}
+                                    <Field name={`items.${idx}.productName`} type="hidden" />
+
+                                    <ProductPicker
+                                      value={(values.items[idx] as any).productName}
+                                      fetchProducts={async (term) => {
+                                        // you already have searchProducts; reuse it:
+                                        return searchProducts(term);
+                                      }}
+                                      onPick={(p) => {
                                         setFieldValue(`items.${idx}.productId`, p._id);
                                         setFieldValue(`items.${idx}.productName`, p.name);
                                         setFieldValue(`items.${idx}.unitPrice`, p.defaultPrice);
@@ -492,10 +548,41 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                           `items.${idx}.unitLabel`,
                                           p.unitLabel || 'pcs',
                                         );
-                                        setFieldValue(`items.${idx}.isTaxable`, !!p.isTaxable);
+                                        setFieldValue(
+                                          `items.${idx}.isTaxable`,
+                                          p.isTaxable ?? true,
+                                        );
                                       }}
-                                      searchProducts={searchProducts}
+                                      onCreate={async (name) => {
+                                        // create quick product with current row defaults
+                                        const res = await fetch('/api/products', {
+                                          method: 'POST',
+                                          headers: { 'content-type': 'application/json' },
+                                          body: JSON.stringify({
+                                            name,
+                                            unitLabel:
+                                              (values.items[idx] as any).unitLabel || 'pcs',
+                                            defaultPrice:
+                                              Number((values.items[idx] as any).unitPrice) || 0,
+                                          }),
+                                        });
+                                        if (!res.ok) {
+                                          const data = await res.json().catch(() => ({}));
+                                          throw new Error(data?.error || 'Create product failed');
+                                        }
+                                        const data = await res.json();
+                                        // return a ProductDoc shape for picker
+                                        return {
+                                          _id: data.id,
+                                          name,
+                                          unitLabel: (values.items[idx] as any).unitLabel || 'pcs',
+                                          defaultPrice:
+                                            Number((values.items[idx] as any).unitPrice) || 0,
+                                          isTaxable: true,
+                                        } as ProductDoc;
+                                      }}
                                     />
+
                                     <ErrorMessage
                                       name={`items.${idx}.productName`}
                                       component="p"
@@ -840,6 +927,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                               href={`/quotes/${draftId}/preview`}
                               className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
                               target="_blank"
+                              rel="noreferrer"
                             >
                               Preview
                             </a>
@@ -847,6 +935,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                               href={`/api/quotes/${draftId}/pdf`}
                               className="rounded bg-black px-3 py-2 text-sm text-white hover:bg-gray-800"
                               target="_blank"
+                              rel="noreferrer"
                             >
                               Download PDF
                             </a>
@@ -865,77 +954,89 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
   );
 }
 
-function ProductQuickPick({
+function ProductPicker({
+  value,
   onPick,
-  searchProducts,
+  onCreate,
+  fetchProducts,
 }: {
+  value: string;
   onPick: (p: ProductDoc) => void;
-  searchProducts: (q: string) => Promise<ProductDoc[]>;
+  onCreate: (name: string) => Promise<ProductDoc>;
+  fetchProducts: (q: string) => Promise<ProductDoc[]>;
 }) {
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(value || '');
   const [open, setOpen] = useState(false);
   const [res, setRes] = useState<ProductDoc[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!open) return;
     const t = setTimeout(async () => {
-      const r = await searchProducts(q);
-      setRes(r);
-    }, 250);
+      setLoading(true);
+      try {
+        const r = await fetchProducts(q);
+        setRes(r);
+      } finally {
+        setLoading(false);
+      }
+    }, 200);
     return () => clearTimeout(t);
-  }, [q, searchProducts]);
+  }, [q, open, fetchProducts]);
+
+  const showCreate =
+    q.trim().length > 0 && !res.some((p) => p.name.toLowerCase() === q.trim().toLowerCase());
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs underline underline-offset-2 transition-colors duration-200"
-      >
-        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-        Browse Products
-      </button>
-
+      <input
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          if (!open) setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Type to search products…"
+        className="w-full rounded border p-2"
+      />
       {open && (
-        <div className="bg-popover border-border absolute z-50 mt-2 w-96 rounded-xl border p-4 shadow-2xl">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search products..."
-            className="bg-input border-border focus:ring-ring mb-3 w-full rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:border-transparent focus:ring-2"
-          />
-          <div className="max-h-64 space-y-1 overflow-auto">
-            {res.map((p) => (
+        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded border bg-white shadow">
+          {loading && <div className="p-2 text-xs text-gray-500">Searching…</div>}
+          {!loading &&
+            res.map((p) => (
               <div
                 key={p._id}
-                className="hover:bg-muted/50 cursor-pointer rounded-lg px-3 py-2 text-sm transition-colors duration-200"
+                className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-50"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onPick(p);
+                  setQ(p.name);
                   setOpen(false);
                 }}
               >
-                <div className="text-foreground font-medium">{p.name}</div>
-                <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                  <span>{p.unitLabel}</span>
-                  <span>•</span>
-                  <span>{p.defaultPrice.toFixed(3)}</span>
-                  <span>•</span>
-                  <span className={p.isTaxable ? 'text-success' : 'text-muted-foreground'}>
-                    {p.isTaxable ? 'Taxable' : 'No tax'}
-                  </span>
+                <div className="font-medium">{p.name}</div>
+                <div className="text-xs text-gray-500">
+                  {p.unitLabel} • {p.defaultPrice.toFixed(3)} {p.isTaxable ? '• Taxable' : ''}
                 </div>
               </div>
             ))}
-            {res.length === 0 && (
-              <div className="text-muted-foreground p-4 text-center text-sm">No products found</div>
-            )}
-          </div>
+          {!loading && showCreate && (
+            <div
+              className="cursor-pointer border-t px-3 py-2 text-sm hover:bg-gray-50"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={async () => {
+                const created = await onCreate(q.trim());
+                onPick(created);
+                setQ(created.name);
+                setOpen(false);
+              }}
+            >
+              + Create “{q.trim()}”
+            </div>
+          )}
+          {!loading && res.length === 0 && !showCreate && (
+            <div className="p-2 text-xs text-gray-500">No matches</div>
+          )}
         </div>
       )}
     </div>
