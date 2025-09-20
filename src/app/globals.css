@@ -1,86 +1,87 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Updated color palette for professional business interface */ /* Slightly off-white for warmth */ /* Deep charcoal for text */
-  --card: oklch(1 0 0); /* Pure white for cards */
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0); /* Deep charcoal for primary elements */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0); /* Light gray for secondary backgrounds */
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0); /* Very light gray for muted elements */
-  --muted-foreground: oklch(0.556 0 0); /* Medium gray for muted text */
-  --accent: oklch(0.97 0 0); /* Professional purple accent */
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325); /* Warm red for errors */
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.922 0 0); /* Light border */
-  --input: oklch(0.922 0 0); /* White input backgrounds */
-  --ring: oklch(0.708 0 0); /* Purple focus ring */
-  --success: oklch(0.55 0.15 140); /* Green for success states */
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.65 0.15 60); /* Amber for warnings */
-  --warning-foreground: oklch(0.15 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem; /* Slightly larger radius for modern feel */
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Professional minimal color palette */
+  --background: #ffffff; /* Pure white background */
+  --foreground: #374151; /* Dark gray text (gray-700) */
+  --card: #f8fafc; /* Very light gray for cards (slate-50) */
+  --card-foreground: #1f2937; /* Dark gray for card text (gray-800) */
+  --popover: #ffffff; /* White popover background */
+  --popover-foreground: #374151; /* Dark gray popover text */
+  --primary: #374151; /* Professional dark gray (gray-700) */
+  --primary-foreground: #ffffff; /* White text on primary */
+  --secondary: #f1f5f9; /* Light gray secondary (slate-100) */
+  --secondary-foreground: #1e293b; /* Dark slate text */
+  --muted: #f8fafc; /* Light gray for muted backgrounds (slate-50) */
+  --muted-foreground: #64748b; /* Medium gray for muted text (slate-500) */
+  --accent: #6366f1; /* Subtle blue accent (indigo-500) */
+  --accent-foreground: #ffffff; /* White text on accent */
+  --destructive: #dc2626; /* Red for errors (red-600) */
+  --destructive-foreground: #ffffff; /* White text on destructive */
+  --border: #e2e8f0; /* Light gray borders (slate-200) */
+  --input: #ffffff; /* White input backgrounds */
+  --ring: rgba(99, 102, 241, 0.3); /* Subtle focus ring */
+  --success: #059669; /* Green for success states (emerald-600) */
+  --success-foreground: #ffffff; /* White text on success */
+  --warning: #d97706; /* Amber for warnings (amber-600) */
+  --warning-foreground: #ffffff; /* White text on warning */
+  --chart-1: #6366f1;
+  --chart-2: #8b5cf6;
+  --chart-3: #06b6d4;
+  --chart-4: #10b981;
+  --chart-5: #f59e0b;
+  --radius: 0.5rem; /* Modern rounded corners */
+  --sidebar: #f8fafc; /* Light gray sidebar */
+  --sidebar-foreground: #374151; /* Dark sidebar text */
+  --sidebar-primary: #ffffff; /* White primary sections */
+  --sidebar-primary-foreground: #1f2937; /* Dark text in sidebar primary */
+  --sidebar-accent: #6366f1; /* Blue sidebar accent */
+  --sidebar-accent-foreground: #ffffff; /* White text on sidebar accent */
+  --sidebar-border: #e2e8f0; /* Light sidebar borders */
+  --sidebar-ring: rgba(99, 102, 241, 0.3); /* Subtle focus ring in sidebar */
 }
 
 .dark {
-  --background: oklch(0.145 0 0); /* Very dark background */
-  --foreground: oklch(0.985 0 0); /* Light text */
-  --card: oklch(0.205 0 0); /* Dark card background */
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --success: oklch(0.6 0.15 140);
-  --success-foreground: oklch(0.08 0 0);
-  --warning: oklch(0.7 0.15 60);
-  --warning-foreground: oklch(0.08 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Professional dark mode colors */
+  --background: #0f172a; /* Very dark slate background */
+  --foreground: #f1f5f9; /* Light text (slate-100) */
+  --card: #1e293b; /* Dark card background (slate-800) */
+  --card-foreground: #f1f5f9; /* Light card text */
+  --popover: #1e293b; /* Dark popover */
+  --popover-foreground: #f1f5f9; /* Light popover text */
+  --primary: #f1f5f9; /* Light primary for dark mode */
+  --primary-foreground: #0f172a; /* Dark text on primary */
+  --secondary: #334155; /* Medium slate secondary (slate-700) */
+  --secondary-foreground: #f1f5f9; /* Light text on secondary */
+  --muted: #1e293b; /* Dark muted background */
+  --muted-foreground: #94a3b8; /* Light muted text (slate-400) */
+  --accent: #6366f1; /* Blue accent remains consistent */
+  --accent-foreground: #ffffff; /* White text on accent */
+  --destructive: #dc2626; /* Red for dark mode */
+  --destructive-foreground: #f1f5f9; /* Light text on destructive */
+  --border: #334155; /* Dark borders (slate-700) */
+  --input: #1e293b; /* Dark input backgrounds */
+  --ring: rgba(99, 102, 241, 0.4); /* Slightly stronger focus ring for dark mode */
+  --success: #10b981; /* Green for dark mode */
+  --success-foreground: #ffffff; /* White text on success */
+  --warning: #f59e0b; /* Amber for warnings */
+  --warning-foreground: #0f172a; /* Dark text on warning */
+  --chart-1: #6366f1;
+  --chart-2: #8b5cf6;
+  --chart-3: #06b6d4;
+  --chart-4: #10b981;
+  --chart-5: #f59e0b;
+  --sidebar: #1e293b; /* Dark sidebar */
+  --sidebar-foreground: #f1f5f9; /* Light sidebar text */
+  --sidebar-primary: #6366f1; /* Primary color in sidebar */
+  --sidebar-primary-foreground: #ffffff; /* White text on sidebar primary */
+  --sidebar-accent: #334155; /* Dark sidebar accent */
+  --sidebar-accent-foreground: #f1f5f9; /* Light text on sidebar accent */
+  --sidebar-border: #334155; /* Dark sidebar borders */
+  --sidebar-ring: rgba(99, 102, 241, 0.4); /* Focus ring in sidebar */
 }
 
 @theme inline {
@@ -136,7 +137,7 @@
     @apply bg-background text-foreground antialiased;
   }
 
-  /* Added smooth transitions for better UX */
+  /* Enhanced smooth transitions and focus states for better UX */
   input,
   textarea,
   select,
@@ -144,16 +145,15 @@
     @apply transition-all duration-200 ease-in-out;
   }
 
-  /* Enhanced focus states */
   input:focus,
   textarea:focus,
   select:focus {
     @apply ring-ring ring-offset-background ring-2 ring-offset-2;
   }
 
-  /* Custom scrollbar styling */
+  /* Custom scrollbar styling for modern look */
   ::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -167,13 +167,20 @@
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-muted-foreground/50;
   }
-}
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+  /* Tab animations */
+  .tab-content {
+    animation: fadeIn 0.3s ease-in-out;
   }
-  body {
-    @apply bg-background text-foreground;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }

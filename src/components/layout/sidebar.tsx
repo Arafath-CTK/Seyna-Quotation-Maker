@@ -8,12 +8,13 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  FileText,
   PackageSearch,
-  History,
   Settings,
   ChevronDown,
   Dot,
+  ChartColumn,
+  Users,
+  FileSignature,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -21,9 +22,10 @@ const NAV = [
   {
     category: 'Main',
     items: [
-      { href: '/composer', label: 'Quote Composer', icon: FileText },
+      { href: '/', label: 'Dashboard', icon: ChartColumn },
+      { href: '/quotations', label: 'Quotations', icon: FileSignature },
       { href: '/products', label: 'Products', icon: PackageSearch },
-      { href: '/history', label: 'History', icon: History },
+      { href: '/customers', label: 'Customers', icon: Users },
       { href: '/settings', label: 'Settings', icon: Settings },
     ],
   },
@@ -155,6 +157,7 @@ export function Sidebar() {
           onClick={() => setMobileOpen(false)}
         />
       )}
+
       <aside
         className={`border-sidebar-border bg-sidebar/95 backdrop-blur-custom fixed inset-y-0 left-0 z-50 w-80 transform border-r shadow-xl transition-transform lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
@@ -165,9 +168,9 @@ export function Sidebar() {
         <div className="border-sidebar-border flex items-center justify-between border-b p-6">
           <div className="flex items-center gap-3">
             <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg">
-              <span className="text-primary-foreground text-sm font-bold">Q</span>
+              <span className="text-primary-foreground text-sm font-bold">S</span>
             </div>
-            <span className="text-lg font-bold">QuoteForge</span>
+            <span className="text-lg font-bold">Seyna</span>
           </div>
           <button
             onClick={() => setMobileOpen(false)}
@@ -210,10 +213,10 @@ export function Sidebar() {
             className={`flex items-center gap-3 transition-all duration-200 lg:[body[data-sidebar='collapsed']_&]:justify-center`}
           >
             <div className="bg-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-              <span className="text-primary-foreground text-sm font-bold">Q</span>
+              <span className="text-primary-foreground text-sm font-bold">S</span>
             </div>
             <div className="lg:[body[data-sidebar='collapsed']_&]:hidden">
-              <span className="text-lg font-bold tracking-tight">QuoteForge</span>
+              <span className="text-lg font-bold tracking-tight">Seyna</span>
               <div className="text-sidebar-foreground/50 text-xs">Professional Quotes</div>
             </div>
           </div>

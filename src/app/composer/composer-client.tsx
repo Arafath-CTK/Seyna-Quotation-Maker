@@ -3,7 +3,61 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Formik, Form, Field, FieldArray, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
-import { computeTotals } from '@/lib/totals';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  User,
+  Package,
+  Calculator,
+  FileText,
+  Plus,
+  Trash2,
+  Save,
+  Check,
+  Eye,
+  Building,
+  Mail,
+  Phone,
+  MapPin,
+  Hash,
+  DollarSign,
+  Percent,
+} from 'lucide-react';
+
+const computeTotals = ({ items, discount, vatRate }: any) => {
+  const subtotal = items.reduce((sum: number, item: any) => {
+    return sum + (Number(item.unitPrice) || 0) * (Number(item.quantity) || 0);
+  }, 0);
+
+  let discountAmount = 0;
+  if (discount.type === 'percent') {
+    discountAmount = subtotal * (Number(discount.value) / 100);
+  } else if (discount.type === 'amount') {
+    discountAmount = Number(discount.value);
+  }
+
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const taxableBase =
+    items.reduce((sum: number, item: any) => {
+      if (!item.isTaxable) return sum;
+      const itemTotal = (Number(item.unitPrice) || 0) * (Number(item.quantity) || 0);
+      return sum + itemTotal;
+    }, 0) -
+    discountAmount * (items.filter((i: any) => i.isTaxable).length / items.length || 0);
+
+  const vatAmount = Math.max(0, taxableBase * vatRate);
+  const grandTotal = afterDiscount + vatAmount;
+
+  return {
+    subtotal,
+    discountAmount,
+    taxableBase: Math.max(0, taxableBase),
+    vatAmount,
+    grandTotal: Math.max(0, grandTotal),
+  };
+};
 
 type QuoteItem = {
   productId?: string;
@@ -28,11 +82,19 @@ type Draft = {
   _id?: string;
   status?: 'draft' | 'finalized';
   currency: string;
-  vatRate: number; // decimal on server, % in UI
+  vatRate: number;
   discount: { type: 'none' | 'percent' | 'amount'; value: number };
   customer: Customer;
   items: QuoteItem[];
   notes?: string;
+};
+
+type ProductDoc = {
+  _id: string;
+  name: string;
+  unitLabel: string;
+  defaultPrice: number;
+  isTaxable: boolean;
 };
 
 const DraftYup = Yup.object({
@@ -42,34 +104,39 @@ const DraftYup = Yup.object({
     addressText: Yup.string().nullable(),
     contactName: Yup.string().nullable(),
     phone: Yup.string().nullable(),
-    email: Yup.string().email('Invalid email').nullable(),
+    email: Yup.string().email('Please enter a valid email address').nullable(),
   }),
-  items: Yup.array().of(
-    Yup.object({
-      productName: Yup.string().required('Product name is required'),
-      unitPrice: Yup.number().min(0).required('Unit price required'),
-      quantity: Yup.number().min(0).required('Quantity required'),
-      unitLabel: Yup.string().required('Unit required'),
-      isTaxable: Yup.boolean().required(),
-    }),
-  ),
+  items: Yup.array()
+    .of(
+      Yup.object({
+        productName: Yup.string().required('Product name is required'),
+        unitPrice: Yup.number().min(0, 'Price must be positive').required('Unit price is required'),
+        quantity: Yup.number().min(0, 'Quantity must be positive').required('Quantity is required'),
+        unitLabel: Yup.string().required('Unit is required'),
+        isTaxable: Yup.boolean().required(),
+      }),
+    )
+    .min(1, 'At least one item is required'),
   discount: Yup.object({
     type: Yup.mixed<'none' | 'percent' | 'amount'>()
       .oneOf(['none', 'percent', 'amount'])
       .required(),
-    value: Yup.number().min(0).required(),
+    value: Yup.number().min(0, 'Discount value must be positive').required(),
   }),
-  vatPercent: Yup.number().min(0).max(100).required(),
-  currency: Yup.string().required(),
+  vatPercent: Yup.number()
+    .min(0, 'VAT rate must be positive')
+    .max(100, 'VAT rate cannot exceed 100%')
+    .required(),
+  currency: Yup.string().required('Currency is required'),
   notes: Yup.string().nullable(),
 });
 
 function toInitialValues(db?: any) {
-  // Default currency & VAT: pull from settings on server in the future; for now safe defaults.
   const currency = db?.currency || 'BHD';
   const vatRate = typeof db?.vatRate === 'number' ? db.vatRate : 0.1;
   const items = (db?.items || []) as QuoteItem[];
   const cust = (db?.customer || {}) as Partial<Customer>;
+
   return {
     currency,
     vatPercent: Math.round(vatRate * 100 * 1000) / 1000,
@@ -127,21 +194,13 @@ function valuesToPayload(values: any): Draft {
   };
 }
 
-type ProductDoc = {
-  _id: string;
-  name: string;
-  sku?: string;
-  defaultPrice: number;
-  unitLabel: string;
-  isTaxable: boolean;
-};
-
 export default function ComposerClient({ initialId }: { initialId?: string }) {
   const [draftId, setDraftId] = useState<string | undefined>(initialId);
   const [loading, setLoading] = useState(false);
   const [initial, setInitial] = useState<any>(toInitialValues());
+  const [saving, setSaving] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [activeTab, setActiveTab] = useState<'customer' | 'items'>('customer');
-  const [finalized, setFinalized] = useState<{ number?: string; totals?: any } | null>(null);
 
   const totals = useMemo(() => {
     return computeTotals({
@@ -151,30 +210,24 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
     });
   }, [initial.items, initial.discount, initial.vatPercent]);
 
-  // Create a draft when landing without id
-  useEffect(() => {
-    const create = async () => {
-      if (draftId) return;
-      const res = await fetch('/api/quotes', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          currency: 'BHD',
-          vatRate: 0.1,
-          discount: { type: 'none', value: 0 },
-          notes: '',
-          customer: { name: '', vatNo: '', addressLines: [] },
-          items: [],
-        }),
-      });
-      const data = await res.json();
-      if (data?.id) setDraftId(data.id);
-    };
-    create();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const canPreview = useMemo(() => {
+    const items = (initial.items || []) as QuoteItem[];
+    const hasItem = items.some(
+      (it) => it.productName && Number(it.quantity) > 0 && Number(it.unitPrice) >= 0,
+    );
+    const hasCustomer = !!initial?.customer?.name?.trim();
+    return hasItem && hasCustomer;
+  }, [initial]);
 
-  // Load an existing draft if initialId present
+  const canFinalize = useMemo(() => {
+    const items = (initial.items || []) as QuoteItem[];
+    const validItems = items.filter(
+      (it) => it.productName && Number(it.quantity) > 0 && Number(it.unitPrice) >= 0,
+    );
+    return validItems.length > 0 && !!initial?.customer?.name?.trim();
+  }, [initial]);
+
+  // Load existing draft
   useEffect(() => {
     const load = async () => {
       if (!draftId || !initialId) return;
@@ -192,354 +245,257 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
     load();
   }, [draftId, initialId]);
 
-  // Product search helper
   const searchProducts = useCallback(async (q: string): Promise<ProductDoc[]> => {
-    const params = new URLSearchParams();
-    params.set('limit', '20');
-    if (q) params.set('search', q);
-    const res = await fetch(`/api/products?${params.toString()}`);
-    const data = await res.json();
-    return (data?.items || []) as ProductDoc[];
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', '20');
+      if (q) params.set('search', q);
+      const res = await fetch(`/api/products?${params.toString()}`);
+      const data = await res.json();
+      return (data?.items || []) as ProductDoc[];
+    } catch (error) {
+      console.error('Product search failed:', error);
+      return [];
+    }
   }, []);
 
   const saveDraft = async () => {
-    if (!draftId) return;
+    setSaving(true);
+    try {
+      const payload = valuesToPayload(initial);
 
-    // 1) Ensure any rows without productId become real products first
-    const createdMap: Record<
-      number,
-      { _id: string; name: string; defaultPrice: number; unitLabel: string }
-    > = {};
-
-    // Loop current item values (not yet converted) to capture latest inputs
-    for (let i = 0; i < (initial.items?.length || 0); i++) {
-      const it = initial.items[i] as any;
-      if (!it?.productId && it?.productName?.trim()) {
-        // if unitPrice is empty/NaN, normalize to 0; same for unitLabel
-        const defaultPrice = Number(it.unitPrice) || 0;
-        const unitLabel = (it.unitLabel || 'pcs').trim() || 'pcs';
-
-        const res = await fetch('/api/products', {
+      if (!draftId) {
+        const res = await fetch('/api/quotes', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            name: it.productName.trim(),
-            unitLabel,
-            defaultPrice,
-          }),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Create draft failed');
+        setDraftId(data.id);
+        return data.id as string;
+      } else {
+        const res = await fetch(`/api/quotes/${draftId}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
-          throw new Error(d?.error || 'Create product failed');
+          throw new Error(d?.error || 'Save failed');
         }
-        const data = await res.json();
-        createdMap[i] = {
-          _id: data.id,
-          name: it.productName.trim(),
-          defaultPrice,
-          unitLabel,
-        };
+        return draftId;
       }
-    }
-
-    // 2) Convert values for server and patch in the new productIds
-    const payload = valuesToPayload({
-      ...initial,
-      items: initial.items.map((it: any, idx: number) =>
-        createdMap[idx]
-          ? {
-              ...it,
-              productId: createdMap[idx]._id,
-              unitPrice: createdMap[idx].defaultPrice,
-              unitLabel: createdMap[idx].unitLabel,
-            }
-          : it,
-      ),
-    });
-
-    // 3) Save the quote draft
-    const res = await fetch(`/api/quotes/${draftId}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      throw new Error(d?.error || 'Save failed');
+    } finally {
+      setSaving(false);
     }
   };
 
   const finalize = async () => {
-    if (!draftId) return;
-    await saveDraft();
-    const res = await fetch(`/api/quotes/${draftId}/finalize`, { method: 'POST' });
-    const data = await res.json();
-    if (res.ok) {
-      setFinalized({ number: data.quoteNumber, totals: data.totals });
-    } else {
-      throw new Error(data?.error || 'Finalize failed');
+    if (!canFinalize) throw new Error('Please complete required fields before finalizing.');
+
+    setFinalizing(true);
+    try {
+      const id = await saveDraft();
+      const res = await fetch(`/api/quotes/${id}/finalize`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Finalize failed');
+
+      window.open(`/api/quotes/${id}/pdf`, '_blank', 'noopener');
+      window.location.href = '/quotations';
+    } finally {
+      setFinalizing(false);
     }
   };
 
-  return (
-    <div className="space-y-8">
-      <div className="bg-card border-border/50 rounded-2xl border p-6 shadow-lg">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('customer')}
-              className={`relative rounded-xl px-6 py-3 font-medium transition-all duration-300 ${
-                activeTab === 'customer'
-                  ? 'from-accent to-accent/90 text-accent-foreground shadow-accent/25 bg-gradient-to-r shadow-lg'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-                Customer Details
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('items')}
-              className={`relative rounded-xl px-6 py-3 font-medium transition-all duration-300 ${
-                activeTab === 'items'
-                  ? 'from-accent to-accent/90 text-accent-foreground shadow-accent/25 bg-gradient-to-r shadow-lg'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-                Items & Pricing
-              </div>
-            </button>
-          </div>
-
-          <div className="bg-muted/50 border-border/50 flex items-center gap-2 rounded-xl border px-4 py-2">
-            <div className="bg-success h-2 w-2 animate-pulse rounded-full"></div>
-            <span className="text-muted-foreground text-sm font-medium">
-              {draftId ? `Draft: ${draftId.slice(-8)}` : 'Creating draft...'}
-            </span>
-          </div>
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="space-y-4 text-center">
+          <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
+          <p className="text-muted-foreground">Loading quote...</p>
         </div>
+      </div>
+    );
+  }
 
-        <Formik
-          enableReinitialize
-          initialValues={initial}
-          validationSchema={DraftYup}
-          onSubmit={() => {}}
-        >
-          {({ values, setFieldValue, isSubmitting }) => {
-            return (
-              <Form className="space-y-8">
-                {/* CUSTOMER TAB */}
-                {activeTab === 'customer' && (
-                  <div className="space-y-6">
-                    <div className="from-card to-muted/20 border-border/50 rounded-2xl border bg-gradient-to-br p-8 shadow-sm">
-                      <div className="mb-6 flex items-center gap-3">
-                        <div className="from-accent/20 to-accent/10 rounded-lg bg-gradient-to-br p-2">
-                          <svg
-                            className="text-accent h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                            />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="text-foreground text-xl font-semibold">
-                            Customer Information
-                          </h2>
-                          <p className="text-muted-foreground text-sm">
-                            Enter your client's contact and billing details
-                          </p>
-                        </div>
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="bg-card border-border rounded-lg border p-1">
+        <div className="flex gap-1">
+          <button
+            onClick={() => setActiveTab('customer')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-3 font-medium transition-all duration-200 ${
+              activeTab === 'customer'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <User className="h-4 w-4" />
+            Customer Details
+          </button>
+          <button
+            onClick={() => setActiveTab('items')}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-3 font-medium transition-all duration-200 ${
+              activeTab === 'items'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Package className="h-4 w-4" />
+            Items & Pricing
+          </button>
+        </div>
+      </div>
+
+      <Formik
+        enableReinitialize
+        initialValues={initial}
+        validationSchema={DraftYup}
+        onSubmit={() => {}}
+      >
+        {({ values, setFieldValue, errors, touched }) => (
+          <Form className="space-y-6">
+            <div className="tab-content">
+              {activeTab === 'customer' && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 rounded-lg p-2">
+                        <User className="text-primary h-5 w-5" />
                       </div>
-
-                      <div className="grid gap-6 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-foreground flex items-center gap-2 text-sm font-semibold">
-                            <span className="text-destructive">*</span>
-                            Company/Client Name
-                          </label>
-                          <Field
-                            name="customer.name"
-                            className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                            placeholder="Enter company or client name"
-                          />
-                          <ErrorMessage
-                            name="customer.name"
-                            component="p"
-                            className="text-destructive mt-1 flex items-center gap-1 text-xs"
-                          >
-                            {(msg) => (
-                              <>
-                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                {msg}
-                              </>
-                            )}
-                          </ErrorMessage>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            VAT Registration Number
-                          </label>
-                          <Field
-                            name="customer.vatNo"
-                            className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                            placeholder="VAT number (optional)"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            Contact Person
-                          </label>
-                          <Field
-                            name="customer.contactName"
-                            className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                            placeholder="Primary contact name"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            Phone Number
-                          </label>
-                          <Field
-                            name="customer.phone"
-                            className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                            placeholder="+1 (555) 123-4567"
-                          />
-                        </div>
-
-                        <div className="space-y-2 md:col-span-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            Email Address
-                          </label>
-                          <Field
-                            name="customer.email"
-                            type="email"
-                            className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                            placeholder="client@company.com"
-                          />
-                          <ErrorMessage
-                            name="customer.email"
-                            component="p"
-                            className="text-destructive mt-1 flex items-center gap-1 text-xs"
-                          >
-                            {(msg) => (
-                              <>
-                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                {msg}
-                              </>
-                            )}
-                          </ErrorMessage>
-                        </div>
-
-                        <div className="space-y-2 md:col-span-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            Billing Address
-                          </label>
-                          <Field
-                            as="textarea"
-                            rows={4}
-                            name="customer.addressText"
-                            className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full resize-none rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
-                            placeholder="Enter billing address (one line per field)&#10;123 Business Street&#10;Suite 100&#10;City, State 12345&#10;Country"
-                          />
-                          <p className="text-muted-foreground text-xs">
-                            Enter each line of the address on a separate line
-                          </p>
-                        </div>
+                      <div>
+                        <CardTitle>Customer Information</CardTitle>
+                        <CardDescription>
+                          Enter your client's contact and billing details
+                        </CardDescription>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* ITEMS TAB */}
-                {activeTab === 'items' && (
-                  <div className="space-y-6">
-                    <div className="from-card to-muted/20 border-border/50 rounded-2xl border bg-gradient-to-br p-8 shadow-sm">
-                      <div className="mb-6 flex items-center gap-3">
-                        <div className="from-accent/20 to-accent/10 rounded-lg bg-gradient-to-br p-2">
-                          <svg
-                            className="text-accent h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                            />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="text-foreground text-xl font-semibold">Quote Items</h2>
-                          <p className="text-muted-foreground text-sm">
-                            Add products and services to your quote
-                          </p>
-                        </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <Building className="h-4 w-4" />
+                          Company/Client Name *
+                        </label>
+                        <Field
+                          name="customer.name"
+                          className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                          placeholder="Enter company or client name"
+                        />
+                        <ErrorMessage
+                          name="customer.name"
+                          component="p"
+                          className="text-destructive text-sm"
+                        />
                       </div>
 
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <Hash className="h-4 w-4" />
+                          VAT Registration Number
+                        </label>
+                        <Field
+                          name="customer.vatNo"
+                          className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                          placeholder="VAT number (optional)"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <User className="h-4 w-4" />
+                          Contact Person
+                        </label>
+                        <Field
+                          name="customer.contactName"
+                          className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                          placeholder="Primary contact name"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <Phone className="h-4 w-4" />
+                          Phone Number
+                        </label>
+                        <Field
+                          name="customer.phone"
+                          className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                          placeholder="+1 (555) 123-4567"
+                        />
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <Mail className="h-4 w-4" />
+                          Email Address
+                        </label>
+                        <Field
+                          name="customer.email"
+                          type="email"
+                          className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                          placeholder="client@company.com"
+                        />
+                        <ErrorMessage
+                          name="customer.email"
+                          component="p"
+                          className="text-destructive text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                          <MapPin className="h-4 w-4" />
+                          Billing Address
+                        </label>
+                        <Field
+                          as="textarea"
+                          rows={4}
+                          name="customer.addressText"
+                          className="bg-input border-border focus:ring-ring w-full resize-none rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                          placeholder="Enter billing address (one line per field)&#10;123 Business Street&#10;Suite 100&#10;City, State 12345&#10;Country"
+                        />
+                        <p className="text-muted-foreground text-xs">
+                          Enter each line of the address on a separate line
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'items' && (
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 rounded-lg p-2">
+                          <Package className="text-primary h-5 w-5" />
+                        </div>
+                        <div>
+                          <CardTitle>Quote Items</CardTitle>
+                          <CardDescription>Add products and services to your quote</CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
                       <FieldArray name="items">
                         {(helpers) => (
                           <div className="space-y-4">
-                            {(values.items as QuoteItem[]).map((it, idx) => (
+                            {(values.items as QuoteItem[]).map((item, idx) => (
                               <div
                                 key={idx}
-                                className="bg-muted/30 border-border/30 rounded-xl border p-6"
+                                className="bg-muted/30 border-border rounded-lg border p-4"
                               >
                                 <div className="grid gap-4 lg:grid-cols-12 lg:items-end">
                                   <div className="space-y-2 lg:col-span-4">
-                                    <label className="text-foreground flex items-center gap-2 text-sm font-semibold">
-                                      <span className="text-destructive">*</span>
-                                      Product/Service
-                                    </label>
-                                    {/* Keep Formik ownership, but hide the raw input */}
+                                    <label className="text-sm font-medium">Product/Service *</label>
                                     <Field name={`items.${idx}.productName`} type="hidden" />
-
                                     <ProductPicker
                                       value={(values.items[idx] as any).productName}
-                                      fetchProducts={async (term) => {
-                                        // you already have searchProducts; reuse it:
-                                        return searchProducts(term);
-                                      }}
+                                      fetchProducts={searchProducts}
                                       onPick={(p) => {
                                         setFieldValue(`items.${idx}.productId`, p._id);
                                         setFieldValue(`items.${idx}.productName`, p.name);
@@ -554,7 +510,6 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                         );
                                       }}
                                       onCreate={async (name) => {
-                                        // create quick product with current row defaults
                                         const res = await fetch('/api/products', {
                                           method: 'POST',
                                           headers: { 'content-type': 'application/json' },
@@ -571,7 +526,6 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                           throw new Error(data?.error || 'Create product failed');
                                         }
                                         const data = await res.json();
-                                        // return a ProductDoc shape for picker
                                         return {
                                           _id: data.id,
                                           name,
@@ -582,62 +536,41 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                         } as ProductDoc;
                                       }}
                                     />
-
                                     <ErrorMessage
                                       name={`items.${idx}.productName`}
                                       component="p"
-                                      className="text-destructive flex items-center gap-1 text-xs"
-                                    >
-                                      {(msg) => (
-                                        <>
-                                          <svg
-                                            className="h-3 w-3"
-                                            fill="currentColor"
-                                            viewBox="0 0 20 20"
-                                          >
-                                            <path
-                                              fillRule="evenodd"
-                                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                                              clipRule="evenodd"
-                                            />
-                                          </svg>
-                                          {msg}
-                                        </>
-                                      )}
-                                    </ErrorMessage>
+                                      className="text-destructive text-sm"
+                                    />
                                   </div>
 
                                   <div className="space-y-2 lg:col-span-2">
-                                    <label className="text-foreground text-sm font-semibold">
+                                    <label className="flex items-center gap-2 text-sm font-medium">
+                                      <DollarSign className="h-4 w-4" />
                                       Unit Price
                                     </label>
                                     <Field
                                       type="number"
                                       step="0.001"
                                       name={`items.${idx}.unitPrice`}
-                                      className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                                      className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                                     />
                                   </div>
 
                                   <div className="space-y-2 lg:col-span-2">
-                                    <label className="text-foreground text-sm font-semibold">
-                                      Quantity
-                                    </label>
+                                    <label className="text-sm font-medium">Quantity</label>
                                     <Field
                                       type="number"
                                       step="0.001"
                                       name={`items.${idx}.quantity`}
-                                      className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                                      className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                                     />
                                   </div>
 
                                   <div className="space-y-2 lg:col-span-2">
-                                    <label className="text-foreground text-sm font-semibold">
-                                      Unit
-                                    </label>
+                                    <label className="text-sm font-medium">Unit</label>
                                     <Field
                                       name={`items.${idx}.unitLabel`}
-                                      className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                                      className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                                       placeholder="pcs, hrs, etc."
                                     />
                                   </div>
@@ -646,28 +579,29 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                     <Field
                                       type="checkbox"
                                       name={`items.${idx}.isTaxable`}
-                                      className="text-accent bg-input border-border focus:ring-ring h-4 w-4 rounded focus:ring-2"
+                                      className="text-primary bg-input border-border focus:ring-ring h-4 w-4 rounded focus:ring-2"
                                     />
-                                    <span className="text-foreground text-sm font-medium">
-                                      Taxable
-                                    </span>
+                                    <span className="text-sm font-medium">Taxable</span>
                                   </div>
 
                                   <div className="pt-6 lg:col-span-1">
-                                    <button
+                                    <Button
                                       type="button"
+                                      variant="outline"
+                                      size="sm"
                                       onClick={() => helpers.remove(idx)}
-                                      className="bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20 w-full rounded-xl border px-4 py-3 font-medium transition-all duration-200"
+                                      className="text-destructive border-destructive/20 hover:bg-destructive/10 w-full"
                                     >
-                                      Remove
-                                    </button>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
                                   </div>
                                 </div>
                               </div>
                             ))}
 
-                            <button
+                            <Button
                               type="button"
+                              variant="outline"
                               onClick={() =>
                                 helpers.push({
                                   productName: '',
@@ -678,62 +612,37 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                   isTaxable: true,
                                 })
                               }
-                              className="from-accent/10 to-accent/5 text-accent border-accent/20 hover:from-accent/20 hover:to-accent/10 flex w-full items-center justify-center gap-2 rounded-xl border bg-gradient-to-r px-6 py-4 font-medium transition-all duration-200"
+                              className="border-primary/50 text-primary hover:bg-primary/5 w-full border-dashed"
                             >
-                              <svg
-                                className="h-5 w-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M12 6v6m0 0v6m0-6h6m-6 0H6m0 6h6m-6 0H6"
-                                />
-                              </svg>
+                              <Plus className="mr-2 h-4 w-4" />
                               Add Line Item
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </FieldArray>
-                    </div>
+                    </CardContent>
+                  </Card>
 
-                    <div className="from-card to-muted/20 border-border/50 rounded-2xl border bg-gradient-to-br p-8 shadow-sm">
-                      <div className="mb-6 flex items-center gap-3">
-                        <div className="from-success/20 to-success/10 rounded-lg bg-gradient-to-br p-2">
-                          <svg
-                            className="text-success h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                            />
-                          </svg>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 rounded-lg p-2">
+                          <Calculator className="text-primary h-5 w-5" />
                         </div>
                         <div>
-                          <h2 className="text-foreground text-xl font-semibold">
-                            Quote Configuration
-                          </h2>
-                          <p className="text-muted-foreground text-sm">
-                            Set currency, tax rates, and discounts
-                          </p>
+                          <CardTitle>Quote Configuration</CardTitle>
+                          <CardDescription>Set currency, tax rates, and discounts</CardDescription>
                         </div>
                       </div>
-
-                      <div className="mb-8 grid gap-6 md:grid-cols-4">
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid gap-4 md:grid-cols-4">
                         <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">Currency</label>
+                          <label className="text-sm font-medium">Currency</label>
                           <Field
                             as="select"
                             name="currency"
-                            className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                            className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                           >
                             {['BHD', 'USD', 'EUR', 'INR', 'AED'].map((c) => (
                               <option key={c} value={c}>
@@ -744,7 +653,8 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">
+                          <label className="flex items-center gap-2 text-sm font-medium">
+                            <Percent className="h-4 w-4" />
                             VAT Rate (%)
                           </label>
                           <Field
@@ -752,18 +662,16 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                             step="0.001"
                             min="0"
                             name="vatPercent"
-                            className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                            className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            Discount Type
-                          </label>
+                          <label className="text-sm font-medium">Discount Type</label>
                           <Field
                             as="select"
                             name="discount.type"
-                            className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                            className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                           >
                             <option value="none">No Discount</option>
                             <option value="percent">Percentage</option>
@@ -772,39 +680,37 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-foreground text-sm font-semibold">
-                            Discount Value
-                          </label>
+                          <label className="text-sm font-medium">Discount Value</label>
                           <Field
                             type="number"
                             step="0.001"
                             min="0"
                             name="discount.value"
-                            className="bg-input border-border focus:ring-ring w-full rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                            className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                           />
                         </div>
                       </div>
 
-                      <div className="from-muted/50 to-muted/30 border-border/30 rounded-xl border bg-gradient-to-br p-6">
-                        <h3 className="text-foreground mb-4 text-lg font-semibold">
-                          Quote Summary
-                        </h3>
+                      <div className="bg-muted/50 border-border rounded-lg border p-6">
+                        <h3 className="mb-4 text-lg font-semibold">Quote Summary</h3>
                         <div className="space-y-3">
                           <div className="flex items-center justify-between py-2">
                             <span className="text-muted-foreground">Subtotal</span>
-                            <span className="text-foreground font-medium">
+                            <span className="font-medium">
                               {values.currency} {totals.subtotal.toFixed(3)}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between py-2">
-                            <span className="text-muted-foreground">Discount</span>
-                            <span className="text-destructive font-medium">
-                              - {values.currency} {totals.discountAmount.toFixed(3)}
-                            </span>
-                          </div>
+                          {totals.discountAmount > 0 && (
+                            <div className="flex items-center justify-between py-2">
+                              <span className="text-muted-foreground">Discount</span>
+                              <span className="text-destructive font-medium">
+                                - {values.currency} {totals.discountAmount.toFixed(3)}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between py-2">
                             <span className="text-muted-foreground">Taxable Base</span>
-                            <span className="text-foreground font-medium">
+                            <span className="font-medium">
                               {values.currency} {totals.taxableBase.toFixed(3)}
                             </span>
                           </div>
@@ -812,144 +718,98 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                             <span className="text-muted-foreground">
                               VAT ({values.vatPercent}%)
                             </span>
-                            <span className="text-foreground font-medium">
+                            <span className="font-medium">
                               {values.currency} {totals.vatAmount.toFixed(3)}
                             </span>
                           </div>
-                          <div className="border-border/50 mt-3 border-t pt-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-foreground text-lg font-semibold">
-                                Grand Total
-                              </span>
-                              <span className="from-success to-success/80 bg-gradient-to-r bg-clip-text text-2xl font-bold text-transparent">
-                                {values.currency} {totals.grandTotal.toFixed(3)}
-                              </span>
-                            </div>
+                          <Separator />
+                          <div className="flex items-center justify-between pt-2">
+                            <span className="text-lg font-semibold">Grand Total</span>
+                            <span className="text-primary text-2xl font-bold">
+                              {values.currency} {totals.grandTotal.toFixed(3)}
+                            </span>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </CardContent>
+                  </Card>
 
-                    <div className="from-card to-muted/20 border-border/50 rounded-2xl border bg-gradient-to-br p-8 shadow-sm">
-                      <div className="mb-4 flex items-center gap-3">
-                        <div className="from-accent/20 to-accent/10 rounded-lg bg-gradient-to-br p-2">
-                          <svg
-                            className="text-accent h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v9a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 rounded-lg p-2">
+                          <FileText className="text-primary h-5 w-5" />
                         </div>
                         <div>
-                          <label className="text-foreground text-lg font-semibold">
-                            Additional Notes
-                          </label>
-                          <p className="text-muted-foreground text-sm">
+                          <CardTitle>Additional Notes</CardTitle>
+                          <CardDescription>
                             Add terms, conditions, or special instructions
-                          </p>
+                          </CardDescription>
                         </div>
                       </div>
+                    </CardHeader>
+                    <CardContent>
                       <Field
                         as="textarea"
                         rows={4}
                         name="notes"
-                        className="bg-input border-border focus:ring-ring placeholder:text-muted-foreground w-full resize-none rounded-xl border px-4 py-3 transition-all duration-200 focus:border-transparent focus:ring-2"
+                        className="bg-input border-border focus:ring-ring w-full resize-none rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                         placeholder="Enter any additional notes, terms, or conditions for this quote..."
                       />
-                    </div>
-                  </div>
-                )}
-
-                <div className="from-background/95 to-background/90 border-border/50 sticky bottom-0 rounded-t-2xl border-t bg-gradient-to-r p-6 backdrop-blur-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={saveDraft}
-                        disabled={!draftId || isSubmitting}
-                        className="from-accent to-accent/90 text-accent-foreground shadow-accent/25 hover:shadow-accent/40 flex items-center gap-2 rounded-xl bg-gradient-to-r px-6 py-3 font-medium shadow-lg transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"
-                          />
-                        </svg>
-                        Save Draft
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={finalize}
-                        disabled={!draftId || isSubmitting}
-                        className="from-success to-success/90 text-success-foreground shadow-success/25 hover:shadow-success/40 flex items-center gap-2 rounded-xl bg-gradient-to-r px-6 py-3 font-medium shadow-lg transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        Finalize Quote
-                      </button>
-                    </div>
-
-                    {finalized && (
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-green-700">
-                          Finalized as <strong>{finalized.number}</strong>
-                        </span>
-                        {/* Preview / Download */}
-                        {draftId && (
-                          <>
-                            <a
-                              href={`/quotes/${draftId}/preview`}
-                              className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Preview
-                            </a>
-                            <a
-                              href={`/api/quotes/${draftId}/pdf`}
-                              className="rounded bg-black px-3 py-2 text-sm text-white hover:bg-gray-800"
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Download PDF
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                    </CardContent>
+                  </Card>
                 </div>
-              </Form>
-            );
-          }}
-        </Formik>
-      </div>
+              )}
+            </div>
+
+            <div className="bg-background/95 border-border sticky bottom-0 rounded-t-lg border-t p-6 backdrop-blur-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" onClick={saveDraft} disabled={saving} variant="outline">
+                    <Save className="mr-2 h-4 w-4" />
+                    {saving ? 'Saving...' : 'Save Draft'}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={finalize}
+                    disabled={!canFinalize || finalizing}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    {finalizing ? 'Finalizing...' : 'Finalize Quote'}
+                  </Button>
+
+                  {canPreview && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        const id = draftId || (await saveDraft());
+                        window.open(`/quotes/${id}/preview`, '_blank', 'noopener');
+                      }}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Preview
+                    </Button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {Object.keys(errors).length > 0 && (
+                    <Badge variant="destructive">{Object.keys(errors).length} error(s)</Badge>
+                  )}
+                  {canFinalize && (
+                    <Badge variant="default" className="bg-success">
+                      Ready to finalize
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Form>
+        )}
+      </Formik>
     </div>
   );
 }
@@ -996,17 +856,25 @@ function ProductPicker({
           if (!open) setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="Type to search products…"
-        className="w-full rounded border p-2"
+        className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
       />
       {open && (
-        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded border bg-white shadow">
-          {loading && <div className="p-2 text-xs text-gray-500">Searching…</div>}
+        <div className="bg-popover border-border absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-lg border shadow-lg">
+          {loading && (
+            <div className="text-muted-foreground p-3 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="border-primary h-4 w-4 animate-spin rounded-full border-b-2"></div>
+                Searching…
+              </div>
+            </div>
+          )}
           {!loading &&
             res.map((p) => (
               <div
                 key={p._id}
-                className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-50"
+                className="hover:bg-muted cursor-pointer px-3 py-2 text-sm transition-colors"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onPick(p);
@@ -1015,14 +883,14 @@ function ProductPicker({
                 }}
               >
                 <div className="font-medium">{p.name}</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-muted-foreground text-xs">
                   {p.unitLabel} • {p.defaultPrice.toFixed(3)} {p.isTaxable ? '• Taxable' : ''}
                 </div>
               </div>
             ))}
           {!loading && showCreate && (
             <div
-              className="cursor-pointer border-t px-3 py-2 text-sm hover:bg-gray-50"
+              className="border-border hover:bg-muted cursor-pointer border-t px-3 py-2 text-sm transition-colors"
               onMouseDown={(e) => e.preventDefault()}
               onClick={async () => {
                 const created = await onCreate(q.trim());
@@ -1031,11 +899,14 @@ function ProductPicker({
                 setOpen(false);
               }}
             >
-              + Create “{q.trim()}”
+              <div className="text-primary flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create "{q.trim()}"
+              </div>
             </div>
           )}
           {!loading && res.length === 0 && !showCreate && (
-            <div className="p-2 text-xs text-gray-500">No matches</div>
+            <div className="text-muted-foreground p-3 text-sm">No matches found</div>
           )}
         </div>
       )}

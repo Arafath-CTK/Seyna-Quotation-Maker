@@ -1,25 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  Plus,
-  Search,
-  Bell,
-  Settings,
-  User,
-  ArrowRight,
-  Moon,
-  Sun,
-  Monitor,
-  LogOut,
-  CreditCard,
-  Users,
-  HelpCircle,
-} from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { Search, User, ArrowRight, LogOut, HelpCircle } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,9 +12,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThemeToggle } from '../ui/theme-toggle';
@@ -37,6 +19,15 @@ import { ThemeToggle } from '../ui/theme-toggle';
 export function Header() {
   const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const router = useRouter();
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    // Wire this to your real search route or server action
+    router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+  }
 
   const getBreadcrumbs = () => {
     const segments = pathname?.split('/').filter(Boolean) || [];
@@ -78,117 +69,64 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Mobile: icon-only, preserves your current behavior */}
           <Button
             variant="outline"
             size="sm"
-            className="relative h-9 w-9 bg-transparent p-0 xl:h-10 xl:w-60 xl:justify-start xl:px-3 xl:py-2"
+            className="relative h-9 w-9 bg-transparent p-0 xl:hidden"
             onClick={() => setSearchOpen(true)}
+            aria-label="Open search"
           >
-            <Search className="h-4 w-4 xl:mr-2" />
-            <span className="hidden xl:inline-flex">Search...</span>
-            <kbd className="bg-muted pointer-events-none absolute top-2 right-1.5 hidden h-6 items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 select-none xl:flex">
-              <span className="text-xs">⌘</span>K
-            </kbd>
+            <Search className="h-4 w-4" />
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="relative h-9 w-9 bg-transparent p-0">
-                <Bell className="h-4 w-4" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs">
-                  3
-                </Badge>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">New quote request</p>
-                  <p className="text-muted-foreground text-xs">From Acme Corp - 2 minutes ago</p>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">Payment received</p>
-                  <p className="text-muted-foreground text-xs">
-                    $2,500 from TechStart Inc - 1 hour ago
-                  </p>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">System update</p>
-                  <p className="text-muted-foreground text-xs">
-                    New features available - 3 hours ago
-                  </p>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Desktop (xl+): full pill input with attached Search button */}
+          <form onSubmit={handleSearch} className="relative hidden xl:block">
+            {/* Input */}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search..."
+              className="border-border focus-visible:ring-ring placeholder:text-muted-foreground h-10 w-96 rounded-lg border bg-transparent pr-24 pl-9 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+              aria-label="Search"
+            />
+
+            {/* Left icon inside the input */}
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+
+            {/* Attached Search button (right, inside the field) */}
+            <Button
+              type="submit"
+              className="absolute top-1/2 right-1 h-8 -translate-y-1/2 rounded-lg px-4 shadow-sm"
+            >
+              Search
+            </Button>
+          </form>
 
           <ThemeToggle />
-
-          <Link href="/composer">
-            <Button size="sm" className="h-9 px-4">
-              <Plus className="mr-2 h-4 w-4" />
-              New Quote
-            </Button>
-          </Link>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                 <Avatar className="h-9 w-9">
                   <AvatarImage src="/professional-avatar.png" alt="User" />
-                  <AvatarFallback>JD</AvatarFallback>
+                  <AvatarFallback>SI</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm leading-none font-medium">John Doe</p>
-                  <p className="text-muted-foreground text-xs leading-none">john@quoteforge.com</p>
+                  <p className="text-sm leading-none font-medium">Sana Ismayeel</p>
+                  <p className="text-muted-foreground text-xs leading-none">
+                    sanaismayeel@gmail.com
+                  </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>Billing</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Users className="mr-2 h-4 w-4" />
-                <span>Team</span>
-              </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <Monitor className="mr-2 h-4 w-4" />
-                  <span>Theme</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem>
-                    <Sun className="mr-2 h-4 w-4" />
-                    <span>Light</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Moon className="mr-2 h-4 w-4" />
-                    <span>Dark</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Monitor className="mr-2 h-4 w-4" />
-                    <span>System</span>
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <HelpCircle className="mr-2 h-4 w-4" />
