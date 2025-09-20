@@ -1,5 +1,5 @@
 import { getCollection } from '@/lib/mongodb';
-import RevolutionarySettingsForm from '@/components/revolutionary-settings-form';
+import RevolutionarySettingsForm from '@/app/settings/settings-form';
 
 export const runtime = 'nodejs';
 
