@@ -31,7 +31,7 @@ const NAV = [
   },
 ];
 
-const HELP_ITEMS: any[] = [];
+// const HELP_ITEMS: any[] = [];
 
 const LS_KEY = 'qf.sidebar.collapsed';
 

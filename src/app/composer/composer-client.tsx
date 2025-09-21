@@ -354,7 +354,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
         validationSchema={DraftYup}
         onSubmit={() => {}}
       >
-        {({ values, setFieldValue, errors, touched }) => (
+        {({ values, setFieldValue, errors }) => (
           <Form className="space-y-6">
             <div className="tab-content">
               {activeTab === 'customer' && (
@@ -367,7 +367,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                       <div>
                         <CardTitle>Customer Information</CardTitle>
                         <CardDescription>
-                          Enter your client's contact and billing details
+                          Enter your client&#39;s contact and billing details
                         </CardDescription>
                       </div>
                     </div>
@@ -901,7 +901,7 @@ function ProductPicker({
             >
               <div className="text-primary flex items-center gap-2">
                 <Plus className="h-4 w-4" />
-                Create "{q.trim()}"
+                Create &quot;{q.trim()}&quot;
               </div>
             </div>
           )}

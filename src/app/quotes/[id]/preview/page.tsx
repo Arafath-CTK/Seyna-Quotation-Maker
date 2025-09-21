@@ -1,7 +1,7 @@
 import { Download, ExternalLink } from 'lucide-react';
 
-export default function QuotePreviewPage({ params }: { params: { id: string } }) {
-  const id = params.id;
+export default async function QuotePreviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
   return (
     <div className="from-background via-background to-muted/20 min-h-screen bg-gradient-to-br">

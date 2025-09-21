@@ -1,8 +1,15 @@
 import { Suspense } from 'react';
 import ComposerClient from './composer-client';
 
-export default function ComposerPage({ searchParams }: { searchParams: { id?: string } }) {
-  const id = typeof searchParams?.id === 'string' ? searchParams.id : undefined;
+// 👇 fix: type searchParams as a Promise
+type PageProps = {
+  searchParams: Promise<{ id?: string }>
+};
+
+export default async function ComposerPage({ searchParams }: PageProps) {
+  // 👇 fix: await the promise
+  const { id } = await searchParams;
+  const initialId = typeof id === 'string' ? id : undefined;
 
   return (
     <div className="flex-1 space-y-8 p-4">
@@ -10,7 +17,7 @@ export default function ComposerPage({ searchParams }: { searchParams: { id?: st
         <h2 className="text-3xl font-bold tracking-tight">Quotation Composer</h2>
       </div>
       <Suspense fallback={<div>Loading...</div>}>
-        <ComposerClient initialId={id} />
+        <ComposerClient initialId={initialId} />
       </Suspense>
     </div>
   );

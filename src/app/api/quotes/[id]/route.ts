@@ -4,12 +4,19 @@ import { QuoteDraftInputSchema } from '@/lib/quote-schemas';
 
 export const runtime = 'nodejs';
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+// 👇 add RouteCtx type to align with Next 15 expectations
+type RouteCtx = { params: Promise<{ id: string }> };
+
+export async function GET(_req: Request, ctx: RouteCtx) {
   try {
+    // 👇 updated: await ctx.params
+    const { id } = await ctx.params;
     const col = await getCollection('quotes');
-    const doc = await col.findOne({ _id: toObjectId(params.id) });
+    const doc = await col.findOne({ _id: toObjectId(id) });
     if (!doc) return new Response('Not found', { status: 404 });
-    return new Response(JSON.stringify(doc), { headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify(doc), {
+      headers: { 'content-type': 'application/json' },
+    });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e?.message || 'get-failed' }), {
       status: 500,
@@ -18,14 +25,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, ctx: RouteCtx) {
   try {
+    // 👇 updated: await ctx.params
+    const { id } = await ctx.params;
     const body = await req.json();
     const payload = QuoteDraftInputSchema.parse(body);
 
     const col = await getCollection('quotes');
-    const id = toObjectId(params.id);
-    const doc = await col.findOne({ _id: id });
+    const objectId = toObjectId(id);
+
+    const doc = await col.findOne({ _id: objectId });
     if (!doc) return new Response('Not found', { status: 404 });
     if (doc.status !== 'draft') {
       return new Response(JSON.stringify({ ok: false, error: 'Cannot edit finalized quote' }), {
@@ -34,7 +44,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       });
     }
 
-    await col.updateOne({ _id: id }, { $set: { ...payload, updatedAt: new Date() } });
+    await col.updateOne({ _id: objectId }, { $set: { ...payload, updatedAt: new Date() } });
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { 'content-type': 'application/json' },

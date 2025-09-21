@@ -3,12 +3,17 @@ import { ObjectId } from 'mongodb';
 
 export const runtime = 'nodejs';
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+// 👇 Add a RouteCtx type that matches Next 15’s expectations
+type RouteCtx = { params: Promise<{ id: string }> };
+
+export async function PUT(req: Request, ctx: RouteCtx) {
   try {
+    // 👇 updated: await ctx.params
+    const { id } = await ctx.params;
     const body = await req.json();
     const col = await getCollection('products');
     await col.updateOne(
-      { _id: new ObjectId(params.id) },
+      { _id: new ObjectId(id) },
       {
         $set: {
           name: body.name,
@@ -16,7 +21,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           defaultPrice: Number(body.defaultPrice),
           updatedAt: new Date(),
         },
-      }
+      },
     );
     return Response.json({ ok: true });
   } catch (e: any) {
@@ -24,12 +29,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, ctx: RouteCtx) {
   try {
+    // 👇 updated: await ctx.params
+    const { id } = await ctx.params;
     const col = await getCollection('products');
     await col.updateOne(
-      { _id: new ObjectId(params.id) },
-      { $set: { deleted: true, updatedAt: new Date() } }
+      { _id: new ObjectId(id) },
+      { $set: { deleted: true, updatedAt: new Date() } },
     );
     return Response.json({ ok: true });
   } catch (e: any) {

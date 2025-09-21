@@ -428,7 +428,8 @@ export default function SettingsClient({
                       />
                       <div className="bg-muted/30 rounded-lg p-4">
                         <p className="text-muted-foreground text-sm">
-                          📋 Example: "QF" will create quotes like QF-2024-001, QF-2024-002, etc.
+                          📋 Example: &quot;QF&quot; will create quotes like QF-2024-001,
+                          QF-2024-002, etc.
                         </p>
                       </div>
                     </div>
@@ -444,9 +445,11 @@ export default function SettingsClient({
                           </p>
                         </div>
                         <Toggle
-                          checked={values.numbering.yearReset}
-                          onChange={(checked) => setFieldValue('numbering.yearReset', checked)}
-                          size="md"
+                          pressed={values.numbering.yearReset}
+                          onPressedChange={(pressed) =>
+                            setFieldValue('numbering.yearReset', pressed)
+                          }
+                          size="default"
                         />
                       </div>
 

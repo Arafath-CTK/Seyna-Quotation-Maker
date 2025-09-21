@@ -18,7 +18,7 @@ import { ThemeToggle } from '../ui/theme-toggle';
 
 export function Header() {
   const pathname = usePathname();
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   const router = useRouter();
@@ -44,7 +44,7 @@ export function Header() {
   };
 
   const breadcrumbs = getBreadcrumbs();
-  const currentPage = breadcrumbs[breadcrumbs.length - 1];
+  // const currentPage = breadcrumbs[breadcrumbs.length - 1];
 
   return (
     <header className="border-border bg-background/95 backdrop-blur-custom sticky top-0 z-30 border-b">
