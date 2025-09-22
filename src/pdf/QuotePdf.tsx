@@ -1,9 +1,14 @@
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
-import { QuoteDoc } from '@/lib/quote-schemas';
+import { Document, Page, Text, View, StyleSheet, Image, DocumentProps } from '@react-pdf/renderer';
+import type { QuoteDoc } from '@/lib/quote-schemas';
+import React from 'react';
 
 const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(3) : '0.000');
 
-export default function QuotePdf({ quote }: { quote: QuoteDoc }) {
+export default function QuotePdf({
+  quote,
+}: {
+  quote: QuoteDoc;
+}): React.ReactElement<DocumentProps> {
   const company = quote.companySnapshot || {
     companyName: '',
     vatNo: '',

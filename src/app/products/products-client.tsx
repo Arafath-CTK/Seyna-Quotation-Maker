@@ -82,25 +82,25 @@ export default function ProductsClient() {
   const columns: Column<Product>[] = [
     {
       key: 'name',
-      label: 'Product Name',
+      header: 'Product Name',
       sortable: true,
       render: (product) => <span className="font-medium">{product.name}</span>,
     },
     {
       key: 'unitLabel',
-      label: 'Unit',
+      header: 'Unit',
       sortable: true,
       render: (product) => <span className="text-muted-foreground">{product.unitLabel}</span>,
     },
     {
       key: 'defaultPrice',
-      label: 'Default Price',
+      header: 'Default Price',
       sortable: true,
       render: (product) => <span className="font-mono">{product.defaultPrice.toFixed(3)}</span>,
     },
     {
       key: 'deleted',
-      label: 'Status',
+      header: 'Status',
       sortable: true,
       render: (product) => (
         <Badge variant={product.deleted ? 'destructive' : 'default'}>
@@ -110,7 +110,7 @@ export default function ProductsClient() {
     },
     {
       key: 'actions',
-      label: 'Actions',
+      header: 'Actions',
       render: (product) => (
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => openEdit(product)}>
@@ -204,7 +204,6 @@ export default function ProductsClient() {
             columns={columns}
             loading={loading}
             searchPlaceholder="Search products..."
-            emptyMessage="No products found. Add your first product to get started."
           />
         </CardContent>
       </Card>

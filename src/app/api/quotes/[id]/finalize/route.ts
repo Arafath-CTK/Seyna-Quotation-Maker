@@ -29,11 +29,17 @@ async function loadCompanySnapshot() {
 
 export const runtime = 'nodejs';
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+// 👇 Define a RouteCtx type to match Next 15 expectations
+type RouteCtx = { params: Promise<{ id: string }> };
+
+export async function POST(_req: Request, ctx: RouteCtx) {
   try {
+    // 👇 updated: await ctx.params
+    const { id } = await ctx.params;
     const col = await getCollection('quotes');
-    const id = toObjectId(params.id);
-    const doc = await col.findOne({ _id: id });
+    const objectId = toObjectId(id);
+
+    const doc = await col.findOne({ _id: objectId });
     if (!doc) return new Response('Not found', { status: 404 });
 
     CustomerInputSchema.parse(doc.customer);
@@ -62,7 +68,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
     // Freeze snapshots
     await col.updateOne(
-      { _id: id },
+      { _id: objectId },
       {
         $set: {
           status: 'finalized',

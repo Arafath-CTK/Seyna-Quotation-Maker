@@ -20,7 +20,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Welcome back, John</h1>
           <p className="text-muted-foreground mt-2">
-            Here's what's happening with your business today.
+            Here&apos;s what&apos;s happening with your business today.
           </p>
         </div>
         <Button>

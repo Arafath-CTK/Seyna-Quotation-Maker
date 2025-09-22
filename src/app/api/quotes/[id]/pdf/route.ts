@@ -1,17 +1,22 @@
 // src/app/api/quotes/[id]/pdf/route.ts
-import React from 'react'; // ✅ add this
+import React from 'react';
 import { getCollection } from '@/lib/mongodb';
 import { toObjectId } from '@/lib/ids';
 import { QuoteDocSchema } from '@/lib/quote-schemas';
-import { renderToBuffer } from '@react-pdf/renderer';
+import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
 import QuotePdf from '@/pdf/QuotePdf';
 
 export const runtime = 'nodejs';
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+// Matches Next 15's generated types
+type RouteCtx = { params: Promise<{ id: string }> };
+
+export async function GET(_req: Request, ctx: RouteCtx) {
   try {
+    const { id } = await ctx.params;
+
     const col = await getCollection('quotes');
-    const doc = await col.findOne({ _id: toObjectId(params.id) });
+    const doc = await col.findOne({ _id: toObjectId(id) });
     if (!doc) return new Response('Not found', { status: 404 });
     if (doc.status !== 'finalized') {
       return new Response('Quote must be finalized before PDF export', { status: 400 });
@@ -23,10 +28,17 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       createdAt: doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt),
     });
 
-    const element = React.createElement(QuotePdf, { quote: parsed }); // ✅
-    const buffer = await renderToBuffer(element);
+    // Explicit element type to satisfy renderToBuffer
+    const element = React.createElement(QuotePdf, {
+      quote: parsed,
+    }) as React.ReactElement<DocumentProps>;
 
-    return new Response(buffer, {
+    const nodeBuffer = await renderToBuffer(element);
+
+    // ✅ Convert Node Buffer -> Uint8Array for the web Response body
+    const body = new Uint8Array(nodeBuffer);
+
+    return new Response(body, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${parsed.quoteNumber || 'quote'}.pdf"`,
