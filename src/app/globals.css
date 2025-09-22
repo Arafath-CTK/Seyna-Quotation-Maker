@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -17,7 +17,7 @@
   --secondary-foreground: #1e293b; /* Dark slate text */
   --muted: #f8fafc; /* Light gray for muted backgrounds (slate-50) */
   --muted-foreground: #64748b; /* Medium gray for muted text (slate-500) */
-  --accent: #6366f1; /* Subtle blue accent (indigo-500) */
+  --accent: #364051; /* Subtle blue accent (indigo-500) */
   --accent-foreground: #ffffff; /* White text on accent */
   --destructive: #dc2626; /* Red for errors (red-600) */
   --destructive-foreground: #ffffff; /* White text on destructive */
@@ -38,7 +38,7 @@
   --sidebar-foreground: #374151; /* Dark sidebar text */
   --sidebar-primary: #ffffff; /* White primary sections */
   --sidebar-primary-foreground: #1f2937; /* Dark text in sidebar primary */
-  --sidebar-accent: #6366f1; /* Blue sidebar accent */
+  --sidebar-accent: #364051; /* Blue sidebar accent */
   --sidebar-accent-foreground: #ffffff; /* White text on sidebar accent */
   --sidebar-border: #e2e8f0; /* Light sidebar borders */
   --sidebar-ring: rgba(99, 102, 241, 0.3); /* Subtle focus ring in sidebar */
@@ -58,7 +58,7 @@
   --secondary-foreground: #f1f5f9; /* Light text on secondary */
   --muted: #1e293b; /* Dark muted background */
   --muted-foreground: #94a3b8; /* Light muted text (slate-400) */
-  --accent: #6366f1; /* Blue accent remains consistent */
+  --accent: #f0f4f9; /* Blue accent remains consistent */
   --accent-foreground: #ffffff; /* White text on accent */
   --destructive: #dc2626; /* Red for dark mode */
   --destructive-foreground: #f1f5f9; /* Light text on destructive */
