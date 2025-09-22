@@ -4,7 +4,7 @@ export async function nextQuoteNumber(opts: {
   prefix: string;
   yearReset: boolean;
 }): Promise<string> {
-  const counters = await getCollection('counters');
+  const counters = await getCollection<{ _id: string; seq: number; year: number }>('counters');
   const year = new Date().getFullYear();
 
   // Use a distinct key per year when yearReset is true
@@ -20,7 +20,7 @@ export async function nextQuoteNumber(opts: {
     { upsert: true, returnDocument: 'after' as const },
   );
 
-  const seq = res?.value?.seq ?? 1;
+  const seq = res?.seq ?? 1;
   const padded = String(seq).padStart(3, '0');
 
   // Still include year in the human-facing number for readability

@@ -74,10 +74,8 @@ export default function CustomersClient() {
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
-      toast({
-        title: 'Error',
+      toast('Error', {
         description: 'Failed to fetch customers',
-        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -99,8 +97,7 @@ export default function CustomersClient() {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
+        toast('Success', {
           description: `Customer ${editingCustomer ? 'updated' : 'created'} successfully`,
         });
         setDialogOpen(false);
@@ -112,10 +109,8 @@ export default function CustomersClient() {
       }
     } catch (error) {
       console.error('Error saving customer:', error);
-      toast({
-        title: 'Error',
+      toast('Error', {
         description: 'Failed to save customer',
-        variant: 'destructive',
       });
     } finally {
       setSubmitting(false);
@@ -149,8 +144,7 @@ export default function CustomersClient() {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
+        toast('Success', {
           description: 'Customer deleted successfully',
         });
         fetchCustomers();
@@ -159,10 +153,8 @@ export default function CustomersClient() {
       }
     } catch (error) {
       console.error('Error deleting customer:', error);
-      toast({
-        title: 'Error',
+      toast('Error', {
         description: 'Failed to delete customer',
-        variant: 'destructive',
       });
     }
   };
@@ -171,6 +163,7 @@ export default function CustomersClient() {
     {
       key: 'name',
       label: 'Name',
+      header: 'Name',
       sortable: true,
       render: (customer: Customer) => (
         <div className="flex flex-col">
@@ -184,6 +177,7 @@ export default function CustomersClient() {
     {
       key: 'email',
       label: 'Contact',
+      header: 'Contact',
       render: (customer: Customer) => (
         <div className="flex flex-col space-y-1">
           <div className="flex items-center gap-2 text-sm">
@@ -202,6 +196,7 @@ export default function CustomersClient() {
     {
       key: 'address',
       label: 'Location',
+      header: 'Location',
       render: (customer: Customer) => (
         <div className="flex items-start gap-2 text-sm">
           <MapPin className="text-muted-foreground mt-0.5 h-3 w-3" />
@@ -218,6 +213,7 @@ export default function CustomersClient() {
     {
       key: 'status',
       label: 'Status',
+      header: 'Status',
       sortable: true,
       render: (customer: Customer) => (
         <Badge variant={customer.status === 'active' ? 'default' : 'secondary'}>
@@ -228,6 +224,7 @@ export default function CustomersClient() {
     {
       key: 'createdAt',
       label: 'Created',
+      header: 'Created',
       sortable: true,
       render: (customer: Customer) => (
         <span className="text-muted-foreground text-sm">
@@ -238,6 +235,7 @@ export default function CustomersClient() {
     {
       key: 'actions',
       label: 'Actions',
+      header: 'Actions',
       render: (customer: Customer) => (
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => handleEdit(customer)}>
@@ -423,7 +421,6 @@ export default function CustomersClient() {
             columns={columns}
             loading={loading}
             searchPlaceholder="Search customers..."
-            emptyMessage="No customers found. Add your first customer to get started."
           />
         </CardContent>
       </Card>

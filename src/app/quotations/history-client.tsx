@@ -154,7 +154,6 @@ export default function HistoryClient() {
             columns={columns}
             loading={loading}
             searchPlaceholder="Search quotes..."
-            emptyMessage="No quotes found. Create your first quote to get started."
           />
         </CardContent>
       </Card>
