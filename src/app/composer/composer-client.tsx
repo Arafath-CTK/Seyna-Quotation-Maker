@@ -403,7 +403,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                         />
                       </div>
 
-                      <div className="space-y-2">
+                      {/* <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium">
                           <User className="h-4 w-4" />
                           Contact Person
@@ -413,7 +413,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                           className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
                           placeholder="Primary contact name"
                         />
-                      </div>
+                      </div> */}
 
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium">
@@ -427,7 +427,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                         />
                       </div>
 
-                      <div className="space-y-2 md:col-span-2">
+                      <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm font-medium">
                           <Mail className="h-4 w-4" />
                           Email Address

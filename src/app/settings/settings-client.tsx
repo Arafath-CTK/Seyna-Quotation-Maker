@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import { Building2, FileText, Hash, Save, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { Toggle } from '@/components/ui/toggle';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 type SettingsDoc = {
@@ -415,50 +415,125 @@ export default function SettingsClient({
                     </div>
                   </div>
                 </CardHeader>
+
                 <CardContent className="space-y-6">
-                  <div className="grid gap-8 lg:grid-cols-2">
-                    <div className="space-y-4">
-                      <label className="text-foreground text-sm font-semibold">
-                        Prefix <span className="text-destructive">*</span>
-                      </label>
-                      <Field
-                        name="numbering.prefix"
-                        className="border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:outline-none"
-                        placeholder="QF"
-                      />
-                      <div className="bg-muted/30 rounded-lg p-4">
-                        <p className="text-muted-foreground text-sm">
-                          📋 Example: &quot;QF&quot; will create quotes like QF-2024-001,
-                          QF-2024-002, etc.
-                        </p>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    {/* Left column - Configuration */}
+                    <div className="space-y-6">
+                      {/* Prefix Input */}
+                      <div className="space-y-3">
+                        <label className="text-foreground text-sm font-semibold">
+                          Prefix <span className="text-destructive">*</span>
+                        </label>
+                        <Field
+                          name="numbering.prefix"
+                          className="border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:outline-none"
+                          placeholder="QF"
+                        />
+                        <ErrorMessage
+                          name="numbering.prefix"
+                          component="p"
+                          className="text-destructive flex items-center gap-2 text-xs"
+                        >
+                          {(msg) => (
+                            <>
+                              <AlertCircle className="h-3 w-3" />
+                              {msg}
+                            </>
+                          )}
+                        </ErrorMessage>
+                      </div>
+
+                      {/* Year Reset Toggle */}
+                      <div className="border-border bg-muted/30 rounded-lg border p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <label className="text-foreground text-sm font-semibold">
+                              Reset sequence every year
+                            </label>
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                              When enabled, numbering restarts at{' '}
+                              <span className="bg-muted rounded px-1 font-mono">001</span> on
+                              January 1st and includes the year in the number.
+                            </p>
+                          </div>
+                          <div className="shrink-0 pt-1">
+                            <Switch
+                              checked={values.numbering.yearReset}
+                              onCheckedChange={(checked) =>
+                                setFieldValue('numbering.yearReset', checked)
+                              }
+                              aria-label="Reset sequence every year"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col justify-center space-y-6">
-                      <div className="border-border bg-muted/30 flex items-center justify-between rounded-lg border p-6">
-                        <div>
-                          <label className="text-foreground text-sm font-semibold">
-                            Reset sequence yearly
-                          </label>
-                          <p className="text-muted-foreground text-sm">
-                            Start numbering from 001 each new year
+                    {/* Right column - Preview and Help */}
+                    <div className="space-y-6">
+                      {/* Live Preview */}
+                      <div className="bg-primary/5 border-primary/20 rounded-lg border p-5">
+                        <div className="mb-3 flex items-center gap-2">
+                          <div className="bg-primary/20 rounded-full p-1">
+                            <Hash className="text-primary h-3 w-3" />
+                          </div>
+                          <p className="text-primary text-xs font-medium">Live Preview</p>
+                        </div>
+                        <div className="bg-background/50 mb-3 rounded-md p-3">
+                          <p className="text-foreground font-mono text-lg tracking-tight">
+                            {(() => {
+                              const year = new Date().getFullYear();
+                              const prefix = (values.numbering.prefix || 'QF').trim();
+                              const base = prefix ? `${prefix}-` : '';
+                              return values.numbering.yearReset
+                                ? `${base}${year}-001`
+                                : `${base}001`;
+                            })()}
                           </p>
                         </div>
-                        <Toggle
-                          pressed={values.numbering.yearReset}
-                          onPressedChange={(pressed) =>
-                            setFieldValue('numbering.yearReset', pressed)
-                          }
-                          size="default"
-                        />
+                        <p className="text-muted-foreground text-xs">
+                          Updates as you type. Sequence continues automatically when saving.
+                        </p>
                       </div>
 
-                      <div className="bg-primary/5 rounded-lg p-6">
-                        <p className="text-primary text-sm font-medium">Preview:</p>
-                        <p className="text-foreground font-mono text-lg">
-                          {values.numbering.prefix}-{values.numbering.yearReset ? '2024' : ''}
-                          {values.numbering.yearReset ? '-001' : '001'}
-                        </p>
+                      {/* Help Information */}
+                      <div className="bg-muted/30 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="text-muted-foreground mt-0.5">
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-foreground text-sm font-medium">
+                              Numbering Examples
+                            </p>
+                            <div className="text-muted-foreground space-y-1 text-xs">
+                              <p>
+                                <span className="font-medium">With yearly reset:</span>{' '}
+                                <span className="bg-muted rounded px-1 font-mono">QF-2025-001</span>
+                                ,{' '}
+                                <span className="bg-muted rounded px-1 font-mono">QF-2025-002</span>
+                              </p>
+                              <p>
+                                <span className="font-medium">Without yearly reset:</span>{' '}
+                                <span className="bg-muted rounded px-1 font-mono">QF-001</span>,{' '}
+                                <span className="bg-muted rounded px-1 font-mono">QF-002</span>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -470,12 +545,6 @@ export default function SettingsClient({
             <div className="bg-background/95 border-border sticky bottom-0 rounded-t-lg border-t p-6 backdrop-blur-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {status === 'saving' && (
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                      <Loader2 className="text-primary h-4 w-4 animate-spin" />
-                      <span>Saving changes...</span>
-                    </div>
-                  )}
                   {status === 'saved' && (
                     <div className="text-success flex items-center gap-2 text-sm">
                       <CheckCircle className="h-4 w-4" />
