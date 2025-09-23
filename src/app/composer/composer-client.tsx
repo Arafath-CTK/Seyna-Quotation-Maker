@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Formik, Form, Field, FieldArray, ErrorMessage, getIn } from 'formik';
 import * as Yup from 'yup';
 import { Button } from '@/components/ui/button';
@@ -514,22 +514,20 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
         validateOnChange
         onSubmit={() => {}}
       >
-        {({ values, setFieldValue, errors, touched, validateForm, setTouched, setErrors }) => {
-          const totals = useMemo(() => {
-            return computeTotals({
-              items: (values.items || []) as any,
-              discount: values.discount,
-              vatRate: Number(values.vatPercent) / 100,
-            });
-          }, [values.items, values.discount, values.vatPercent]);
+        {({ values, setFieldValue, errors, touched, setTouched, setErrors }) => {
+          const totals = computeTotals({
+            items: (values.items || []) as any,
+            discount: values.discount,
+            vatRate: Number(values.vatPercent) / 100,
+          });
 
-          const canDraft = useMemo(() => {
+          const canDraft = () => {
             const hasCustomer = !!values?.customer?.name?.trim();
             const badRow = (values.items as QuoteItem[]).some(
               (it) => Number(it.unitPrice) < 0 || Number(it.quantity) < 0,
             );
             return hasCustomer && !badRow;
-          }, [values]);
+          };
 
           const hasCustomer = !!values?.customer?.name?.trim();
           const itemsArr = (values.items || []) as QuoteItem[];
@@ -780,14 +778,14 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                                     normalizeName(p.name)),
                                             );
                                             if (exists) {
-                                              setErrors((prev: any) => {
-                                                const next = { ...(prev || {}) };
+                                              {
+                                                const next: any = { ...(errors as any) };
                                                 next.items ??= [];
                                                 next.items[idx] ??= {};
                                                 next.items[idx].productName =
                                                   'Duplicate product in quote';
-                                                return next;
-                                              });
+                                                setErrors(next);
+                                              }
                                               focusByPath(`items.${idx}.productName`);
                                               return;
                                             }
@@ -812,14 +810,14 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                                               (it) => normalizeName(it.productName) === normalized,
                                             );
                                             if (exists) {
-                                              setErrors((prev: any) => {
-                                                const next = { ...(prev || {}) };
+                                              {
+                                                const next: any = { ...(errors as any) };
                                                 next.items ??= [];
                                                 next.items[idx] ??= {};
                                                 next.items[idx].productName =
                                                   'Duplicate product in quote';
-                                                return next;
-                                              });
+                                                setErrors(next);
+                                              }
                                               focusByPath(`items.${idx}.productName`);
                                               throw new Error('duplicate-product');
                                             }
