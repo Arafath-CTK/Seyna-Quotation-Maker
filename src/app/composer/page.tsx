@@ -1,13 +1,11 @@
 import { Suspense } from 'react';
 import ComposerClient from './composer-client';
 
-// 👇 fix: type searchParams as a Promise
 type PageProps = {
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<{ id?: string }>;
 };
 
 export default async function ComposerPage({ searchParams }: PageProps) {
-  // 👇 fix: await the promise
   const { id } = await searchParams;
   const initialId = typeof id === 'string' ? id : undefined;
 

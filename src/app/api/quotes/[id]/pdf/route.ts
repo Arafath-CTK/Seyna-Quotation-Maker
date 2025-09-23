@@ -8,7 +8,6 @@ import QuotePdf from '@/pdf/QuotePdf';
 
 export const runtime = 'nodejs';
 
-// Matches Next 15's generated types
 type RouteCtx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteCtx) {
@@ -28,19 +27,16 @@ export async function GET(_req: Request, ctx: RouteCtx) {
       createdAt: doc.createdAt instanceof Date ? doc.createdAt : new Date(doc.createdAt),
     });
 
-    // Explicit element type to satisfy renderToBuffer
     const element = React.createElement(QuotePdf, {
       quote: parsed,
     }) as React.ReactElement<DocumentProps>;
-
     const nodeBuffer = await renderToBuffer(element);
-
-    // ✅ Convert Node Buffer -> Uint8Array for the web Response body
     const body = new Uint8Array(nodeBuffer);
 
     return new Response(body, {
       headers: {
         'Content-Type': 'application/pdf',
+        // inline for iframe preview; <a download> still works and forces download
         'Content-Disposition': `inline; filename="${parsed.quoteNumber || 'quote'}.pdf"`,
       },
     });
