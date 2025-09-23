@@ -10,10 +10,10 @@ import { Suspense } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
-  title: 'QuoteForge - Professional Quotation Management',
+  title: 'Seyna - Quotation Maker',
   description:
     'Generate professional quotations fast with advanced analytics and customer management',
-  generator: 'QuoteForge',
+  generator: 'Seyna',
 };
 
 export default function RootLayout({

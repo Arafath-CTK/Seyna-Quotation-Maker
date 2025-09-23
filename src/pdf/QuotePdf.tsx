@@ -1,214 +1,243 @@
-import { Document, Page, Text, View, StyleSheet, Image, DocumentProps } from '@react-pdf/renderer';
-import type { QuoteDoc } from '@/lib/quote-schemas';
 import React from 'react';
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 
-const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(3) : '0.000');
+const styles = StyleSheet.create({
+  page: {
+    paddingTop: 32,
+    paddingBottom: 36,
+    paddingHorizontal: 32,
+    fontSize: 10,
+    color: '#111',
+  },
+  header: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  titleBlock: { flexGrow: 1 },
+  title: { fontSize: 20, fontWeight: 700 },
+  meta: { marginTop: 4, color: '#555' },
+  letterhead: {
+    width: 120,
+    height: 40,
+    objectFit: 'contain',
+    marginLeft: 16,
+  },
+  twoCol: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  col: { flex: 1 },
+  label: { color: '#666', marginBottom: 4, fontSize: 9 },
+  box: {
+    padding: 8,
+    border: '1px solid #E5E7EB',
+    borderRadius: 4,
+    minHeight: 40,
+  },
+  table: {
+    width: '100%',
+    border: '1px solid #E5E7EB',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  thead: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderBottom: '1px solid #E5E7EB',
+  },
+  th: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    fontWeight: 700,
+    fontSize: 10,
+  },
+  tr: {
+    flexDirection: 'row',
+    borderBottom: '1px solid #F3F4F6',
+  },
+  td: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    fontSize: 10,
+  },
+  right: { textAlign: 'right' },
+  totals: {
+    marginTop: 10,
+    marginLeft: 'auto',
+    width: 280,
+    borderTop: '1px solid #E5E7EB',
+    paddingTop: 8,
+  },
+  totalsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 2,
+  },
+  grand: {
+    marginTop: 6,
+    borderTop: '1px solid #E5E7EB',
+    paddingTop: 6,
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  footer: {
+    position: 'absolute',
+    left: 32,
+    right: 32,
+    bottom: 24,
+    fontSize: 9,
+    color: '#666',
+    borderTop: '1px solid #E5E7EB',
+    paddingTop: 6,
+  },
+});
 
-export default function QuotePdf({
-  quote,
-}: {
-  quote: QuoteDoc;
-}): React.ReactElement<DocumentProps> {
-  const company = quote.companySnapshot || {
-    companyName: '',
-    vatNo: '',
-    address: [],
-    footerText: '',
-    currency: quote.currency,
-    vatRate: quote.vatRate,
-    letterheadUrl: '',
-    margins: { top: 24, right: 24, bottom: 24, left: 24 },
+type QuotePdfProps = {
+  quote: any;
+};
+
+const currency = (v: number, ccy: string) => `${ccy} ${Number(v || 0).toFixed(3)}`;
+
+const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
+  const company = quote.companySnapshot || {};
+  const customer = quote.customerSnapshot || quote.customer || {};
+  const items = quote.items || [];
+  const totals = quote.totals || {
+    subtotal: 0,
+    discountAmount: 0,
+    taxableBase: 0,
+    vatAmount: 0,
+    grandTotal: 0,
   };
-  const customer = quote.customerSnapshot || quote.customer;
 
-  const pad = company.margins || { top: 24, right: 24, bottom: 24, left: 24 };
-
-  const styles = StyleSheet.create({
-    page: {
-      fontSize: 11,
-      paddingTop: pad.top,
-      paddingRight: pad.right,
-      paddingBottom: pad.bottom,
-      paddingLeft: pad.left,
-      fontFamily: 'Helvetica',
-    },
-    letterhead: { width: '100%', marginBottom: 12 },
-    headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    title: { fontSize: 18, fontWeight: 700 },
-    small: { fontSize: 10, color: '#555' },
-    box: { border: '1 solid #ddd', padding: 8, borderRadius: 4 },
-    section: { marginBottom: 10 },
-    label: { fontSize: 9, color: '#666', marginBottom: 2 },
-    tableHeader: { flexDirection: 'row', backgroundColor: '#f2f2f2', border: '1 solid #ddd' },
-    tableRow: {
-      flexDirection: 'row',
-      borderLeft: '1 solid #ddd',
-      borderRight: '1 solid #ddd',
-      borderBottom: '1 solid #eee',
-    },
-    th: { padding: 6, fontSize: 10, fontWeight: 700, borderRight: '1 solid #ddd' },
-    td: { padding: 6, fontSize: 10, borderRight: '1 solid #eee' },
-    colName: { flex: 5 },
-    colQty: { flex: 1, textAlign: 'right' as const },
-    colUnit: { flex: 1.2, textAlign: 'center' as const },
-    colPrice: { flex: 2, textAlign: 'right' as const },
-    colTotal: { flex: 2, textAlign: 'right' as const },
-    totalsBox: {
-      marginTop: 8,
-      alignSelf: 'flex-end',
-      width: 260,
-      border: '1 solid #ddd',
-      borderRadius: 4,
-    },
-    totalsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      padding: 6,
-      borderBottom: '1 solid #eee',
-    },
-    totalsStrong: { fontWeight: 700 },
-    notes: { fontSize: 10, marginTop: 10 },
-    footer: {
-      position: 'absolute',
-      left: pad.left,
-      right: pad.right,
-      bottom: 10,
-      fontSize: 9,
-      color: '#666',
-      borderTop: '1 solid #eee',
-      paddingTop: 6,
-    },
-  });
-
-  const number = quote.quoteNumber ? `#${quote.quoteNumber}` : '';
-  const issue = quote.issueDate ? new Date(quote.issueDate).toLocaleDateString() : '';
-  const cur = quote.currency || company.currency || 'BHD';
+  const ccy = company.currency || quote.currency || 'BHD';
+  const vatPercent = Math.round((company.vatRate || quote.vatRate || 0) * 100 * 1000) / 1000;
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Letterhead image */}
-        {company.letterheadUrl ? (
-          <Image src={company.letterheadUrl} style={styles.letterhead} />
-        ) : null}
-
+      <Page size="A4" style={styles.page} wrap>
         {/* Header */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>Quotation {number}</Text>
-            {issue ? <Text style={styles.small}>Date: {issue}</Text> : null}
+        <View style={styles.header} fixed>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>Quotation</Text>
+            <Text style={styles.meta}>
+              {quote.quoteNumber ? `# ${quote.quoteNumber} ` : ''}
+              {quote.issueDate ? `• ${new Date(quote.issueDate).toLocaleDateString()}` : ''}
+            </Text>
           </View>
-          <View>
-            <Text style={{ fontSize: 12, fontWeight: 700 }}>{company.companyName}</Text>
-            {company.vatNo ? <Text style={styles.small}>VAT No: {company.vatNo}</Text> : null}
-            {company.address?.map((l, i) => (
-              <Text key={i} style={styles.small}>
-                {l}
-              </Text>
-            ))}
-          </View>
+          {company.letterheadUrl ? (
+            <Image src={company.letterheadUrl} style={styles.letterhead} />
+          ) : null}
         </View>
 
         {/* Parties */}
-        <View style={[styles.section, { flexDirection: 'row', gap: 8 }]}>
-          <View style={[styles.box, { flex: 1 }]}>
-            <Text style={styles.label}>Bill To</Text>
-            <Text style={{ fontWeight: 700 }}>{customer?.name || ''}</Text>
-            {customer?.vatNo ? <Text style={styles.small}>VAT No: {customer.vatNo}</Text> : null}
-            {customer?.addressLines?.map((l, i) => (
-              <Text key={i} style={styles.small}>
-                {l}
-              </Text>
-            ))}
-            {customer?.contactName ? (
-              <Text style={styles.small}>Attn: {customer.contactName}</Text>
-            ) : null}
-            {customer?.email ? <Text style={styles.small}>{customer.email}</Text> : null}
-            {customer?.phone ? <Text style={styles.small}>{customer.phone}</Text> : null}
-          </View>
-          <View style={[styles.box, { width: 180 }]}>
-            <Text style={styles.label}>Summary</Text>
-            <Text style={styles.small}>Currency: {cur}</Text>
-            <Text style={styles.small}>VAT: {(quote.vatRate ?? company.vatRate ?? 0) * 100}%</Text>
-            {quote.status === 'finalized' && quote.totals ? (
-              <Text style={[styles.small, { fontWeight: 700 }]}>
-                Total: {cur} {fmt(quote.totals.grandTotal)}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Table */}
-        <View style={styles.tableHeader}>
-          <Text style={[styles.th, styles.colName]}>Product</Text>
-          <Text style={[styles.th, styles.colQty]}>Qty</Text>
-          <Text style={[styles.th, styles.colUnit]}>Unit</Text>
-          <Text style={[styles.th, styles.colPrice]}>Unit Price</Text>
-          <Text style={[styles.th, styles.colTotal]}>Line Total</Text>
-        </View>
-
-        {(quote.items || []).map((it, idx) => {
-          const line = (Number(it.unitPrice) || 0) * (Number(it.quantity) || 0);
-          return (
-            <View key={idx} style={styles.tableRow}>
-              <Text style={[styles.td, styles.colName]}>
-                {it.productName}
-                {it.description ? ` — ${it.description}` : ''}
-              </Text>
-              <Text style={[styles.td, styles.colQty]}>{fmt(Number(it.quantity) || 0)}</Text>
-              <Text style={[styles.td, styles.colUnit]}>{it.unitLabel || 'pcs'}</Text>
-              <Text style={[styles.td, styles.colPrice]}>
-                {cur} {fmt(Number(it.unitPrice) || 0)}
-              </Text>
-              <Text style={[styles.td, styles.colTotal]}>
-                {cur} {fmt(line)}
-              </Text>
+        <View style={styles.twoCol}>
+          <View style={styles.col}>
+            <Text style={styles.label}>From</Text>
+            <View style={styles.box}>
+              <Text>{company.companyName || 'Company'}</Text>
+              {company.vatNo ? <Text>VAT: {company.vatNo}</Text> : null}
+              {(company.address || []).map((l: string, i: number) => (
+                <Text key={i}>{l}</Text>
+              ))}
             </View>
-          );
-        })}
+          </View>
+          <View style={styles.col}>
+            <Text style={styles.label}>Bill To</Text>
+            <View style={styles.box}>
+              <Text>{customer.name || '-'}</Text>
+              {customer.vatNo ? <Text>VAT: {customer.vatNo}</Text> : null}
+              {(customer.addressLines || []).map((l: string, i: number) => (
+                <Text key={i}>{l}</Text>
+              ))}
+              {customer.email ? <Text>{customer.email}</Text> : null}
+              {customer.phone ? <Text>{customer.phone}</Text> : null}
+            </View>
+          </View>
+        </View>
+
+        {/* Items Table */}
+        <View style={styles.table}>
+          <View style={styles.thead}>
+            <Text style={[styles.th, { flex: 5 }]}>Product / Service</Text>
+            <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Unit Price</Text>
+            <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Qty</Text>
+            <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Unit</Text>
+            <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Line Total</Text>
+          </View>
+
+          <View wrap>
+            {items.map((it: any, idx: number) => {
+              const line = (Number(it.unitPrice) || 0) * (Number(it.quantity) || 0);
+              return (
+                <View key={idx} style={styles.tr}>
+                  <Text style={[styles.td, { flex: 5 }]}>
+                    {it.productName || '-'}
+                    {it.description ? ` — ${it.description}` : ''}
+                    {it.isTaxable === false ? ' (Non-taxable)' : ''}
+                  </Text>
+                  <Text style={[styles.td, { flex: 2 }, styles.right]}>
+                    {currency(it.unitPrice, ccy)}
+                  </Text>
+                  <Text style={[styles.td, { flex: 2 }, styles.right]}>
+                    {Number(it.quantity || 0)}
+                  </Text>
+                  <Text style={[styles.td, { flex: 1 }, styles.right]}>{it.unitLabel || ''}</Text>
+                  <Text style={[styles.td, { flex: 2 }, styles.right]}>{currency(line, ccy)}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
 
         {/* Totals */}
-        {quote.totals && (
-          <View style={styles.totalsBox}>
-            <View style={styles.totalsRow}>
-              <Text>Subtotal</Text>
-              <Text>
-                {cur} {fmt(quote.totals.subtotal)}
-              </Text>
-            </View>
+        <View style={styles.totals}>
+          <View style={styles.totalsRow}>
+            <Text>Subtotal</Text>
+            <Text>{currency(totals.subtotal, ccy)}</Text>
+          </View>
+          {totals.discountAmount > 0 ? (
             <View style={styles.totalsRow}>
               <Text>Discount</Text>
-              <Text>
-                - {cur} {fmt(quote.totals.discountAmount)}
-              </Text>
+              <Text>- {currency(totals.discountAmount, ccy)}</Text>
             </View>
+          ) : null}
+          <View style={styles.totalsRow}>
+            <Text>Taxable Base</Text>
+            <Text>{currency(totals.taxableBase, ccy)}</Text>
+          </View>
+          <View style={styles.totalsRow}>
+            <Text>VAT ({vatPercent}%)</Text>
+            <Text>{currency(totals.vatAmount, ccy)}</Text>
+          </View>
+
+          <View style={styles.grand}>
             <View style={styles.totalsRow}>
-              <Text>Taxable Base</Text>
-              <Text>
-                {cur} {fmt(quote.totals.taxableBase)}
-              </Text>
-            </View>
-            <View style={styles.totalsRow}>
-              <Text>VAT</Text>
-              <Text>
-                {cur} {fmt(quote.totals.vatAmount)}
-              </Text>
-            </View>
-            <View style={[styles.totalsRow, { borderBottom: '0 solid transparent' }]}>
-              <Text style={styles.totalsStrong}>Grand Total</Text>
-              <Text style={styles.totalsStrong}>
-                {cur} {fmt(quote.totals.grandTotal)}
-              </Text>
+              <Text>Grand Total</Text>
+              <Text>{currency(totals.grandTotal, ccy)}</Text>
             </View>
           </View>
-        )}
+        </View>
 
         {/* Notes */}
-        {quote.notes ? <Text style={styles.notes}>Notes: {quote.notes}</Text> : null}
+        {quote.notes ? (
+          <View style={{ marginTop: 12 }}>
+            <Text style={styles.label}>Notes</Text>
+            <Text>{quote.notes}</Text>
+          </View>
+        ) : null}
 
         {/* Footer */}
-        {company.footerText ? <Text style={styles.footer}>{company.footerText}</Text> : null}
+        {company.footerText ? (
+          <View style={styles.footer} fixed>
+            <Text>{company.footerText}</Text>
+          </View>
+        ) : null}
       </Page>
     </Document>
   );
-}
+};
+
+export default QuotePdf;

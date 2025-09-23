@@ -1,7 +1,10 @@
-import { Download, ExternalLink } from 'lucide-react';
+import { Download, ExternalLink, List } from 'lucide-react';
 
 export default async function QuotePreviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Finalized-only PDF endpoint (no preview of drafts)
+  const pdfSrc = `/api/quotes/${id}/pdf`;
 
   return (
     <div className="from-background via-background to-muted/20 min-h-screen bg-gradient-to-br">
@@ -20,16 +23,18 @@ export default async function QuotePreviewPage({ params }: { params: Promise<{ i
                 </svg>
               </div>
               <div>
-                <h1 className="text-foreground text-3xl font-bold tracking-tight">Quote Preview</h1>
+                <h1 className="text-foreground text-3xl font-bold tracking-tight">
+                  Finalized Quote
+                </h1>
                 <p className="text-muted-foreground text-balance">
-                  Review and download your finalized quote
+                  View and download. Editing is disabled for finalized quotations.
                 </p>
               </div>
             </div>
 
             <div className="flex gap-3">
               <a
-                href={`/api/quotes/${id}/pdf`}
+                href={pdfSrc}
                 className="border-border hover:bg-muted/50 inline-flex items-center gap-2 rounded-lg border px-4 py-2 font-medium transition-colors"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -38,12 +43,19 @@ export default async function QuotePreviewPage({ params }: { params: Promise<{ i
                 Open in new tab
               </a>
               <a
-                href={`/api/quotes/${id}/pdf`}
+                href={pdfSrc}
                 download
                 className="bg-accent hover:bg-accent/90 text-accent-foreground inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors"
               >
                 <Download className="h-4 w-4" />
                 Download PDF
+              </a>
+              <a
+                href="/quotations"
+                className="border-border hover:bg-muted/50 inline-flex items-center gap-2 rounded-lg border px-4 py-2 font-medium transition-colors"
+              >
+                <List className="h-4 w-4" />
+                Back to Quotations
               </a>
             </div>
           </div>
@@ -53,11 +65,7 @@ export default async function QuotePreviewPage({ params }: { params: Promise<{ i
       <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="border-border bg-card overflow-hidden rounded-2xl border shadow-sm">
           <div className="aspect-[1/1.414] w-full bg-white">
-            <iframe
-              src={`/api/quotes/${id}/pdf`}
-              className="h-full w-full border-0"
-              title="Quote PDF Preview"
-            />
+            <iframe src={pdfSrc} className="h-full w-full border-0" title="Quote PDF Preview" />
           </div>
         </div>
       </main>
