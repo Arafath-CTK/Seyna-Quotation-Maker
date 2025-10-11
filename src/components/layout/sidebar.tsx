@@ -22,10 +22,10 @@ const NAV = [
   {
     category: 'Main',
     items: [
-      { href: '/', label: 'Dashboard', icon: ChartColumn },
+      // { href: '/', label: 'Dashboard', icon: ChartColumn },
       { href: '/quotations', label: 'Quotations', icon: FileSignature },
       { href: '/products', label: 'Products', icon: PackageSearch },
-      { href: '/customers', label: 'Customers', icon: Users },
+      // { href: '/customers', label: 'Customers', icon: Users },
       { href: '/settings', label: 'Settings', icon: Settings },
     ],
   },
