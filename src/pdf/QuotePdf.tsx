@@ -1,5 +1,17 @@
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+import fs from 'fs';
+import path from 'path';
+import sharp from 'sharp';
+
+const letterheadPath = path.resolve('./public/letterheads/ChalilCoLetterHead.svg');
+const letterheadSvg = fs.readFileSync(letterheadPath, 'utf8');
+
+const svgBuffer = Buffer.from(letterheadSvg);
+const pngBuffer = await sharp(svgBuffer).png().toBuffer();
+const letterheadBase64 = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+
+const A4 = { width: 595.28, height: 841.89 };
 
 const styles = StyleSheet.create({
   page: {
@@ -8,6 +20,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     fontSize: 10,
     color: '#111',
+  },
+  bgLetterhead: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: A4.width,
+    height: A4.height,
   },
   header: {
     marginBottom: 16,
@@ -115,35 +134,55 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
   const ccy = company.currency || quote.currency || 'BHD';
   const vatPercent = Math.round((company.vatRate || quote.vatRate || 0) * 100 * 1000) / 1000;
 
+  const letterheadUrl =
+    quote?.settings?.letterhead?.url || quote?.letterhead?.url || company?.letterheadUrl || '';
+
+  // ✅ Use margins from settings (and default to a good baseline)
+  const m = {
+    top: quote?.settings?.letterhead?.margins?.top ?? 120,
+    right: quote?.settings?.letterhead?.margins?.right ?? 32,
+    bottom: quote?.settings?.letterhead?.margins?.bottom ?? 100,
+    left: quote?.settings?.letterhead?.margins?.left ?? 32,
+  };
+
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap>
+      <Page
+        size="A4"
+        style={[
+          styles.page,
+          {
+            paddingTop: m.top,
+            paddingRight: m.right,
+            paddingBottom: m.bottom,
+            paddingLeft: m.left,
+          },
+        ]}
+        wrap
+      >
+        {/* ✅ Full-page letterhead background on every page */}
+        <Image src={letterheadBase64} style={styles.bgLetterhead} fixed />
+
         {/* Header */}
-        <View style={styles.header} fixed>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>Quotation</Text>
-            <Text style={styles.meta}>
+        <View
+          style={{ marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between' }}
+          fixed
+        >
+          <View style={{ flexGrow: 1 }}>
+            <Text style={{ fontSize: 20, fontWeight: 700 }}>Quotation</Text>
+            <Text style={{ marginTop: 4, color: '#555' }}>
               {quote.quoteNumber ? `# ${quote.quoteNumber} ` : ''}
               {quote.issueDate ? `• ${new Date(quote.issueDate).toLocaleDateString()}` : ''}
             </Text>
           </View>
-          {company.letterheadUrl ? (
+
+          {/* {company.letterheadUrl ? (
             <Image src={company.letterheadUrl} style={styles.letterhead} />
-          ) : null}
+          ) : null} */}
         </View>
 
         {/* Parties */}
         <View style={styles.twoCol}>
-          <View style={styles.col}>
-            <Text style={styles.label}>From</Text>
-            <View style={styles.box}>
-              <Text>{company.companyName || 'Company'}</Text>
-              {company.vatNo ? <Text>VAT: {company.vatNo}</Text> : null}
-              {(company.address || []).map((l: string, i: number) => (
-                <Text key={i}>{l}</Text>
-              ))}
-            </View>
-          </View>
           <View style={styles.col}>
             <Text style={styles.label}>Bill To</Text>
             <View style={styles.box}>
