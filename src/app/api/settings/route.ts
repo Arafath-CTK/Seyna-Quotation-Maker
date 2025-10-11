@@ -6,21 +6,54 @@ export const runtime = 'nodejs';
 
 const COLLECTION = 'settings';
 
+function sanitize(doc: any) {
+  if (!doc) return null;
+
+  // IMPORTANT: force primitives everywhere; drop Mongo-native things.
+  return {
+    company: {
+      name: String(doc.company?.name ?? ''),
+      vatNo: doc.company?.vatNo ? String(doc.company.vatNo) : undefined,
+      address: Array.isArray(doc.company?.address) ? doc.company.address.map(String) : [],
+      footerText: doc.company?.footerText ? String(doc.company.footerText) : undefined,
+      currency: String(doc.company?.currency ?? 'BHD'),
+      defaultVatRate: Number(doc.company?.defaultVatRate ?? 0),
+    },
+    letterhead: {
+      url: doc.letterhead?.url ? String(doc.letterhead.url) : '',
+      margins: {
+        top: Number(doc.letterhead?.margins?.top ?? 120),
+        right: Number(doc.letterhead?.margins?.right ?? 32),
+        bottom: Number(doc.letterhead?.margins?.bottom ?? 100),
+        left: Number(doc.letterhead?.margins?.left ?? 32),
+      },
+    },
+    numbering: {
+      prefix: String(doc.numbering?.prefix ?? 'QF'),
+      yearReset: !!doc.numbering?.yearReset,
+    },
+  };
+}
+
 async function getSingletonSettings() {
   const col = await getCollection(COLLECTION);
-  const doc = await col.findOne({});
-  if (!doc) {
-    // If missing, create defaults from schema
-    const defaults = SettingsSchema.parse({});
-    const result = await col.insertOne({
-      ...defaults,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    return { _id: result.insertedId, ...defaults };
-  }
-  // strip _id for consistency in client (optional)
-  return doc;
+  const doc = await col.findOne({}, { projection: { _id: 0, createdAt: 0, updatedAt: 0 } });
+  if (doc) return sanitize(doc);
+
+  const defaults = SettingsSchema.parse({});
+  await col.updateOne(
+    {},
+    {
+      $setOnInsert: {
+        ...defaults,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    },
+    { upsert: true },
+  );
+
+  return sanitize(defaults);
 }
 
 export async function GET() {
@@ -40,45 +73,33 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    // Optional write guard for MVP. If ADMIN_SECRET isn't set, this is a no-op.
     assertAdmin(req);
 
     const payload = await req.json();
-
-    // Server-side validation (authoritative)
     const parsed = SettingsSchema.parse(payload);
+
+    // Force url to be a string (prevents accidentally storing a URL object)
+    if (parsed.letterhead?.url != null) {
+      parsed.letterhead.url = String(parsed.letterhead.url);
+    }
 
     const col = await getCollection(COLLECTION);
     await col.updateOne(
       {},
-      {
-        $set: {
-          ...parsed,
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { createdAt: new Date() },
-      },
+      { $set: { ...parsed, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
       { upsert: true },
     );
 
+    // Return sanitized doc (or just ok:true)
     return new Response(JSON.stringify({ ok: true }), {
       headers: { 'content-type': 'application/json' },
     });
-  } catch (e: unknown) {
-    const status =
-      typeof e === 'object' && e !== null && 'status' in e
-        ? ((e as { status?: number }).status ?? 400)
-        : 400;
-    const errorMessage =
-      typeof e === 'object' && e !== null && 'message' in e
-        ? (e as { message?: string }).message || 'validation-failed'
-        : 'validation-failed';
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: errorMessage,
-      }),
-      { status, headers: { 'content-type': 'application/json' } },
-    );
+  } catch (e: any) {
+    const status = typeof e?.status === 'number' ? e.status : 400;
+    const errorMessage = typeof e?.message === 'string' ? e.message : 'validation-failed';
+    return new Response(JSON.stringify({ ok: false, error: errorMessage }), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
   }
 }
