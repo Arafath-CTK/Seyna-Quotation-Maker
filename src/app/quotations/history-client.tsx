@@ -7,6 +7,13 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog, // Added Dialog
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton'; // Added Skeleton
 
 type QuoteRow = {
   _id: string;
@@ -21,6 +28,8 @@ type QuoteRow = {
 export default function HistoryClient() {
   const [rows, setRows] = useState<QuoteRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewStatus, setPreviewStatus] = useState<'draft' | 'finalized' | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -37,6 +46,20 @@ export default function HistoryClient() {
     };
     load();
   }, []);
+
+  const handleOpenPreview = (id: string, status: 'draft' | 'finalized') => {
+    setPreviewId(id);
+    setPreviewStatus(status);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewId(null);
+    setPreviewStatus(null);
+  };
+
+  const pdfUrl = previewId
+    ? `/api/quotes/${previewId}/pdf${previewStatus === 'draft' ? '?draft=true' : ''}`
+    : undefined;
 
   const columns: Column<QuoteRow>[] = [
     {
@@ -104,22 +127,37 @@ export default function HistoryClient() {
       render: (quote) => (
         <div className="flex items-center justify-center gap-2">
           {quote.status === 'draft' ? (
-            <Button asChild variant="ghost" size="sm">
-              <Link href={`/composer?id=${quote._id}`} title="Edit draft">
-                <Edit className="mr-1 h-3 w-3" />
-                Edit
-              </Link>
-            </Button>
-          ) : (
             <>
-              <Button asChild variant="ghost" size="sm">
-                <Link href={`/quotes/${quote._id}/preview`} title="Preview quote">
-                  <Eye className="mr-1 h-3 w-3" />
-                  Preview
-                </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenPreview(quote._id, quote.status)}
+                title="Preview Draft"
+              >
+                <Eye className="mr-1 h-3 w-3" />
+                Preview
               </Button>
               <Button asChild variant="ghost" size="sm">
-                <Link href={`/api/quotes/${quote._id}/pdf`} title="Download PDF">
+                <Link href={`/composer?id=${quote._id}`} title="Edit draft">
+                  <Edit className="mr-1 h-3 w-3" />
+                  Edit
+                </Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              {/* Change Preview button to open the modal/dialog */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenPreview(quote._id, quote.status)}
+                title="Preview Finalized Quote"
+              >
+                <Eye className="mr-1 h-3 w-3" />
+                Preview
+              </Button>
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/api/quotes/${quote._id}/pdf`} title="Download PDF" download>
                   <Download className="mr-1 h-3 w-3" />
                   PDF
                 </Link>
@@ -157,6 +195,29 @@ export default function HistoryClient() {
           />
         </CardContent>
       </Card>
+
+      {/* PDF Preview Dialog (Modal) - New Component */}
+      <Dialog open={!!previewId} onOpenChange={handleClosePreview}>
+        <DialogContent className="max-h-[90vh] max-w-4xl p-0" showCloseButton={false}>
+          <DialogHeader className="border-b p-4">
+            <DialogTitle className="text-lg">
+              {previewStatus === 'draft' ? 'Draft Quote Preview' : 'Finalized Quote Preview'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden p-0">
+            {pdfUrl ? (
+              <div className="aspect-[1/1.414] w-full">
+                {/* Use an iframe to embed the PDF endpoint */}
+                <iframe src={pdfUrl} className="h-full w-full border-0" title="Quote PDF Preview" />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center p-12">
+                <Skeleton className="h-96 w-full" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

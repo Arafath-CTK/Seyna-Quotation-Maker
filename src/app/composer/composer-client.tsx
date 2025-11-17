@@ -23,7 +23,15 @@ import {
   Hash,
   DollarSign,
   Percent,
+  Eye, // Added Eye for preview
 } from 'lucide-react';
+import {
+  Dialog, // Added Dialog
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton'; // Added Skeleton for loading state
 
 /* =========================
    Decimal helpers (3 dp)
@@ -31,7 +39,7 @@ import {
 const to3 = (n: any) => {
   const num = Number(n);
   if (!isFinite(num)) return 0;
-  return Math.round(num * 1000) / 1000;
+  return Number(num.toFixed(3));
 };
 const add3 = (a: number, b: number) => to3(to3(a) + to3(b));
 const mul3 = (a: number, b: number) => to3(to3(a) * to3(b));
@@ -65,7 +73,7 @@ const computeTotals = ({ items, discount, vatRate }: any) => {
     taxableBase = Math.max(0, sub3(taxablePortion, to3(discountAmount * share)));
   }
 
-  const vatAmount = Math.max(0, to3(taxableBase * (Number(vatRate) || 0)));
+  const vatAmount = Math.max(0, mul3(taxableBase, Number(vatRate) || 0));
   const grandTotal = add3(afterDiscount, vatAmount);
 
   return {
@@ -401,6 +409,8 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [activeTab, setActiveTab] = useState<'customer' | 'items'>('customer');
+  const [previewOpen, setPreviewOpen] = useState(false); // New state for preview dialog
+  const [previewLoading, setPreviewLoading] = useState(false); // New state for preview loading
 
   useEffect(() => {
     const load = async () => {
@@ -466,6 +476,44 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
     }
   };
 
+  const canDraft = (values: any) => {
+    const hasCustomer = !!values?.customer?.name?.trim();
+    const badRow = (values.items as QuoteItem[]).some(
+      (it) => Number(it.unitPrice) < 0 || Number(it.quantity) < 0,
+    );
+    return hasCustomer && !badRow;
+  };
+
+  const handlePreview = async (values: any, formikInitialValues: any) => {
+    // Simple check if the form values are different from the initial loaded values.
+    // We stringify the *current values* and compare it to the initial load/save state.
+    // This is a basic dirty check for demonstration. A proper implementation would track `formik.dirty` more accurately.
+    const isDraftDirty =
+      JSON.stringify(valuesToPayload(values)) !==
+      JSON.stringify(valuesToPayload(formikInitialValues));
+
+    // If there is no ID or the draft is dirty, save it first
+    if (!draftId || isDraftDirty) {
+      setPreviewLoading(true);
+      try {
+        const id = await saveDraft(values);
+        if (id) {
+          setDraftId(id);
+          setPreviewOpen(true);
+          // Optional: Update initial state to reflect the saved state if save was successful
+          // setInitial(toInitialValues(valuesToPayload(values)));
+        }
+      } catch (error) {
+        console.error('Error saving draft for preview:', error);
+        // Optionally show a toast error
+      } finally {
+        setPreviewLoading(false);
+      }
+    } else {
+      setPreviewOpen(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -521,13 +569,8 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
             vatRate: Number(values.vatPercent) / 100,
           });
 
-          const canDraft = () => {
-            const hasCustomer = !!values?.customer?.name?.trim();
-            const badRow = (values.items as QuoteItem[]).some(
-              (it) => Number(it.unitPrice) < 0 || Number(it.quantity) < 0,
-            );
-            return hasCustomer && !badRow;
-          };
+          // Re-define canDraft locally to use current Formik values for correct dependency
+          const localCanDraft = canDraft(values);
 
           const hasCustomer = !!values?.customer?.name?.trim();
           const itemsArr = (values.items || []) as QuoteItem[];
@@ -578,7 +621,7 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
           };
 
           const draftAndExit = async () => {
-            if (!canDraft) return;
+            if (!localCanDraft) return;
             const id = await saveDraft(values);
             window.location.href = '/quotations';
             return id;
@@ -594,623 +637,664 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
             (values.items || []).map((it: any) => normalizeName(it.productName)).filter(Boolean),
           );
 
+          const pdfPreviewUrl = draftId ? `/api/quotes/${draftId}/pdf?draft=true` : undefined;
+
           return (
-            <Form className="space-y-6">
-              <div className="tab-content">
-                {activeTab === 'customer' && (
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div className="bg-primary/10 rounded-lg p-2">
-                          <User className="text-primary h-5 w-5" />
-                        </div>
-                        <div>
-                          <CardTitle>Customer Information</CardTitle>
-                          <CardDescription>
-                            Enter your client&#39;s contact and billing details
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm font-medium">
-                            <Building className="h-4 w-4" />
-                            Company/Client Name *
-                          </label>
-                          <Field name="customer.name">
-                            {({ field }: any) => (
-                              <input
-                                {...field}
-                                className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                  getIn(touched, 'customer.name') && getIn(errors, 'customer.name')
-                                    ? 'border-destructive focus:ring-destructive/50'
-                                    : 'border-border focus:ring-ring'
-                                }`}
-                                placeholder="Enter company or client name"
-                              />
-                            )}
-                          </Field>
-                          <ErrorMessage
-                            name="customer.name"
-                            component="p"
-                            className="text-destructive text-sm"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm font-medium">
-                            <Hash className="h-4 w-4" />
-                            VAT Registration Number
-                          </label>
-                          <Field name="customer.vatNo">
-                            {({ field }: any) => (
-                              <input
-                                {...field}
-                                className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
-                                placeholder="VAT number (optional)"
-                              />
-                            )}
-                          </Field>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm font-medium">
-                            <Phone className="h-4 w-4" />
-                            Phone Number
-                          </label>
-                          <Field name="customer.phone">
-                            {({ field }: any) => (
-                              <input
-                                {...field}
-                                className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
-                                placeholder="+1 (555) 123-4567"
-                              />
-                            )}
-                          </Field>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm font-medium">
-                            <Mail className="h-4 w-4" />
-                            Email Address
-                          </label>
-                          <Field name="customer.email">
-                            {({ field }: any) => (
-                              <input
-                                {...field}
-                                type="email"
-                                className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                  getIn(touched, 'customer.email') &&
-                                  getIn(errors, 'customer.email')
-                                    ? 'border-destructive focus:ring-destructive/50'
-                                    : 'border-border focus:ring-ring'
-                                }`}
-                                placeholder="client@company.com"
-                              />
-                            )}
-                          </Field>
-                          <ErrorMessage
-                            name="customer.email"
-                            component="p"
-                            className="text-destructive text-sm"
-                          />
-                        </div>
-
-                        <div className="space-y-2 md:col-span-2">
-                          <label className="flex items-center gap-2 text-sm font-medium">
-                            <MapPin className="h-4 w-4" />
-                            Billing Address
-                          </label>
-                          <Field name="customer.addressText">
-                            {({ field }: any) => (
-                              <textarea
-                                {...field}
-                                rows={4}
-                                className="bg-input border-border focus:ring-ring w-full resize-none rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
-                                placeholder="Enter billing address (one line per field)&#10;123 Business Street&#10;Suite 100&#10;City, State 12345&#10;Country"
-                              />
-                            )}
-                          </Field>
-                          <p className="text-muted-foreground text-xs">
-                            Enter each line of the address on a separate line
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {activeTab === 'items' && (
-                  <div className="space-y-6">
+            <>
+              <Form className="space-y-6">
+                <div className="tab-content">
+                  {activeTab === 'customer' && (
                     <Card>
                       <CardHeader>
                         <div className="flex items-center gap-3">
                           <div className="bg-primary/10 rounded-lg p-2">
-                            <Package className="text-primary h-5 w-5" />
+                            <User className="text-primary h-5 w-5" />
                           </div>
                           <div>
-                            <CardTitle>Quote Items</CardTitle>
+                            <CardTitle>Customer Information</CardTitle>
                             <CardDescription>
-                              Add products and services to your quote
-                            </CardDescription>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <FieldArray name="items">
-                          {(helpers) => (
-                            <div className="space-y-4">
-                              {(values.items as QuoteItem[]).map((item, idx) => {
-                                const priceErr = getIn(errors, `items.${idx}.unitPrice`);
-                                const priceTouched = getIn(touched, `items.${idx}.unitPrice`);
-                                const qtyErr = getIn(errors, `items.${idx}.quantity`);
-                                const qtyTouched = getIn(touched, `items.${idx}.quantity`);
-                                const unitErr = getIn(errors, `items.${idx}.unitLabel`);
-                                const unitTouched = getIn(touched, `items.${idx}.unitLabel`);
-                                const nameErr = getIn(errors, `items.${idx}.productName`);
-                                const nameTouched = getIn(touched, `items.${idx}.productName`);
-
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="bg-muted/30 border-border rounded-lg border p-4"
-                                  >
-                                    <div className="grid gap-4 lg:grid-cols-12 lg:items-end">
-                                      <div className="space-y-2 lg:col-span-4">
-                                        <label className="text-sm font-medium">
-                                          Product/Service *
-                                        </label>
-                                        <Field name={`items.${idx}.productName`} type="hidden" />
-                                        <ProductPicker
-                                          index={idx}
-                                          value={(values.items[idx] as any).productName}
-                                          fetchProducts={searchProducts}
-                                          excludeIds={existingIds}
-                                          excludeNames={existingNames}
-                                          onPick={(p) => {
-                                            const exists = (values.items as any[]).some(
-                                              (it, i) =>
-                                                i !== idx &&
-                                                ((p._id && it.productId === p._id) ||
-                                                  normalizeName(it.productName) ===
-                                                    normalizeName(p.name)),
-                                            );
-                                            if (exists) {
-                                              {
-                                                const next: any = { ...(errors as any) };
-                                                next.items ??= [];
-                                                next.items[idx] ??= {};
-                                                next.items[idx].productName =
-                                                  'Duplicate product in quote';
-                                                setErrors(next);
-                                              }
-                                              focusByPath(`items.${idx}.productName`);
-                                              return;
-                                            }
-                                            setFieldValue(`items.${idx}.productId`, p._id);
-                                            setFieldValue(`items.${idx}.productName`, p.name);
-                                            setFieldValue(
-                                              `items.${idx}.unitPrice`,
-                                              to3(p.defaultPrice),
-                                            );
-                                            setFieldValue(
-                                              `items.${idx}.unitLabel`,
-                                              p.unitLabel || 'pcs',
-                                            );
-                                            setFieldValue(
-                                              `items.${idx}.isTaxable`,
-                                              p.isTaxable ?? true,
-                                            );
-                                          }}
-                                          onCreate={async (name) => {
-                                            const normalized = normalizeName(name);
-                                            const exists = (values.items as any[]).some(
-                                              (it) => normalizeName(it.productName) === normalized,
-                                            );
-                                            if (exists) {
-                                              {
-                                                const next: any = { ...(errors as any) };
-                                                next.items ??= [];
-                                                next.items[idx] ??= {};
-                                                next.items[idx].productName =
-                                                  'Duplicate product in quote';
-                                                setErrors(next);
-                                              }
-                                              focusByPath(`items.${idx}.productName`);
-                                              throw new Error('duplicate-product');
-                                            }
-                                            const res = await fetch('/api/products', {
-                                              method: 'POST',
-                                              headers: { 'content-type': 'application/json' },
-                                              body: JSON.stringify({
-                                                name,
-                                                unitLabel:
-                                                  (values.items[idx] as any).unitLabel || 'pcs',
-                                                defaultPrice:
-                                                  to3((values.items[idx] as any).unitPrice) || 0,
-                                              }),
-                                            });
-                                            if (!res.ok) {
-                                              const data = await res.json().catch(() => ({}));
-                                              throw new Error(
-                                                data?.error || 'Create product failed',
-                                              );
-                                            }
-                                            const data = await res.json();
-                                            return {
-                                              _id: data.id,
-                                              name,
-                                              unitLabel:
-                                                (values.items[idx] as any).unitLabel || 'pcs',
-                                              defaultPrice:
-                                                to3((values.items[idx] as any).unitPrice) || 0,
-                                              isTaxable: true,
-                                            } as ProductDoc;
-                                          }}
-                                        />
-                                        {nameTouched && nameErr && (
-                                          <p className="text-destructive text-sm">{nameErr}</p>
-                                        )}
-                                      </div>
-
-                                      <div className="space-y-2 lg:col-span-2">
-                                        <label className="flex items-center gap-2 text-sm font-medium">
-                                          <DollarSign className="h-4 w-4" />
-                                          Unit Price
-                                        </label>
-                                        <Field name={`items.${idx}.unitPrice`}>
-                                          {({ field }: any) => (
-                                            <input
-                                              {...field}
-                                              type="number"
-                                              inputMode="decimal"
-                                              step="0.001"
-                                              onBlur={(e) => {
-                                                const v = to3(e.target.value);
-                                                setFieldValue(`items.${idx}.unitPrice`, v);
-                                              }}
-                                              className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                                priceTouched && priceErr
-                                                  ? 'border-destructive focus:ring-destructive/50'
-                                                  : 'border-border focus:ring-ring'
-                                              }`}
-                                            />
-                                          )}
-                                        </Field>
-                                        {priceTouched && priceErr && (
-                                          <p className="text-destructive text-sm">
-                                            {String(priceErr)}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <div className="space-y-2 lg:col-span-2">
-                                        <label className="text-sm font-medium">Quantity</label>
-                                        <Field name={`items.${idx}.quantity`}>
-                                          {({ field }: any) => (
-                                            <input
-                                              {...field}
-                                              type="number"
-                                              inputMode="decimal"
-                                              step="0.001"
-                                              onBlur={(e) => {
-                                                const v = to3(e.target.value);
-                                                setFieldValue(`items.${idx}.quantity`, v);
-                                              }}
-                                              className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                                qtyTouched && qtyErr
-                                                  ? 'border-destructive focus:ring-destructive/50'
-                                                  : 'border-border focus:ring-ring'
-                                              }`}
-                                            />
-                                          )}
-                                        </Field>
-                                        {qtyTouched && qtyErr && (
-                                          <p className="text-destructive text-sm">
-                                            {String(qtyErr)}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <div className="space-y-2 lg:col-span-2">
-                                        <label className="text-sm font-medium">Unit</label>
-                                        <Field name={`items.${idx}.unitLabel`}>
-                                          {({ field }: any) => (
-                                            <input
-                                              {...field}
-                                              className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                                unitTouched && unitErr
-                                                  ? 'border-destructive focus:ring-destructive/50'
-                                                  : 'border-border focus:ring-ring'
-                                              }`}
-                                              placeholder="pcs, hrs, etc."
-                                            />
-                                          )}
-                                        </Field>
-                                        {unitTouched && unitErr && (
-                                          <p className="text-destructive text-sm">
-                                            {String(unitErr)}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <div className="flex items-center justify-center gap-2 pt-6 lg:col-span-1">
-                                        <Field
-                                          type="checkbox"
-                                          name={`items.${idx}.isTaxable`}
-                                          className="text-primary bg-input border-border focus:ring-ring h-4 w-4 rounded focus:ring-2"
-                                        />
-                                        <span className="text-sm font-medium">Taxable</span>
-                                      </div>
-
-                                      <div className="pt-6 lg:col-span-1">
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => helpers.remove(idx)}
-                                          className="text-destructive border-destructive/20 hover:bg-destructive/10 w-full"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                  helpers.push({
-                                    productName: '',
-                                    description: '',
-                                    unitPrice: 0,
-                                    quantity: 1,
-                                    unitLabel: 'pcs',
-                                    isTaxable: true,
-                                  })
-                                }
-                                className="border-primary/50 text-primary hover:bg-primary/5 w-full border-dashed"
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Add Line Item
-                              </Button>
-                            </div>
-                          )}
-                        </FieldArray>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <div className="flex items-center gap-3">
-                          <div className="bg-primary/10 rounded-lg p-2">
-                            <Calculator className="text-primary h-5 w-5" />
-                          </div>
-                          <div>
-                            <CardTitle>Quote Configuration</CardTitle>
-                            <CardDescription>
-                              Set currency, tax rates, and discounts
+                              Enter your client&#39;s contact and billing details
                             </CardDescription>
                           </div>
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-6">
-                        <div className="grid gap-4 md:grid-cols-4">
+                        <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">Currency</label>
-                            <Field
-                              as="select"
-                              name="currency"
-                              className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
-                            >
-                              {['BHD', 'USD', 'EUR', 'INR', 'AED'].map((c) => (
-                                <option key={c} value={c}>
-                                  {c}
-                                </option>
-                              ))}
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                              <Building className="h-4 w-4" />
+                              Company/Client Name *
+                            </label>
+                            <Field name="customer.name">
+                              {({ field }: any) => (
+                                <input
+                                  {...field}
+                                  className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
+                                    getIn(touched, 'customer.name') &&
+                                    getIn(errors, 'customer.name')
+                                      ? 'border-destructive focus:ring-destructive/50'
+                                      : 'border-border focus:ring-ring'
+                                  }`}
+                                  placeholder="Enter company or client name"
+                                />
+                              )}
+                            </Field>
+                            <ErrorMessage
+                              name="customer.name"
+                              component="p"
+                              className="text-destructive text-sm"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                              <Hash className="h-4 w-4" />
+                              VAT Registration Number
+                            </label>
+                            <Field name="customer.vatNo">
+                              {({ field }: any) => (
+                                <input
+                                  {...field}
+                                  className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                                  placeholder="VAT number (optional)"
+                                />
+                              )}
                             </Field>
                           </div>
 
                           <div className="space-y-2">
                             <label className="flex items-center gap-2 text-sm font-medium">
-                              <Percent className="h-4 w-4" />
-                              VAT Rate (%)
+                              <Phone className="h-4 w-4" />
+                              Phone Number
                             </label>
-                            <Field name="vatPercent">
+                            <Field name="customer.phone">
                               {({ field }: any) => (
                                 <input
                                   {...field}
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="0.001"
-                                  min="0"
-                                  onBlur={(e) => setFieldValue('vatPercent', to3(e.target.value))}
+                                  className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                                  placeholder="+1 (555) 123-4567"
+                                />
+                              )}
+                            </Field>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                              <Mail className="h-4 w-4" />
+                              Email Address
+                            </label>
+                            <Field name="customer.email">
+                              {({ field }: any) => (
+                                <input
+                                  {...field}
+                                  type="email"
                                   className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                    getIn(touched, 'vatPercent') && getIn(errors, 'vatPercent')
+                                    getIn(touched, 'customer.email') &&
+                                    getIn(errors, 'customer.email')
                                       ? 'border-destructive focus:ring-destructive/50'
                                       : 'border-border focus:ring-ring'
                                   }`}
+                                  placeholder="client@company.com"
                                 />
                               )}
                             </Field>
                             <ErrorMessage
-                              name="vatPercent"
+                              name="customer.email"
                               component="p"
                               className="text-destructive text-sm"
                             />
                           </div>
 
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Discount Type</label>
-                            <Field
-                              as="select"
-                              name="discount.type"
-                              className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
-                            >
-                              <option value="none">No Discount</option>
-                              <option value="percent">Percentage</option>
-                              <option value="amount">Fixed Amount</option>
-                            </Field>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Discount Value</label>
-                            <Field name="discount.value">
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                              <MapPin className="h-4 w-4" />
+                              Billing Address
+                            </label>
+                            <Field name="customer.addressText">
                               {({ field }: any) => (
-                                <input
+                                <textarea
                                   {...field}
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="0.001"
-                                  min="0"
-                                  onBlur={(e) =>
-                                    setFieldValue('discount.value', to3(e.target.value))
-                                  }
-                                  className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
-                                    getIn(touched, 'discount.value') &&
-                                    getIn(errors, 'discount.value')
-                                      ? 'border-destructive focus:ring-destructive/50'
-                                      : 'border-border focus:ring-ring'
-                                  }`}
+                                  rows={4}
+                                  className="bg-input border-border focus:ring-ring w-full resize-none rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                                  placeholder="Enter billing address (one line per field)&#10;123 Business Street&#10;Suite 100&#10;City, State 12345&#10;Country"
                                 />
                               )}
                             </Field>
-                            <ErrorMessage
-                              name="discount.value"
-                              component="p"
-                              className="text-destructive text-sm"
-                            />
+                            <p className="text-muted-foreground text-xs">
+                              Enter each line of the address on a separate line
+                            </p>
                           </div>
                         </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                        <div className="bg-muted/50 border-border rounded-lg border p-6">
-                          <h3 className="mb-4 text-lg font-semibold">Quote Summary</h3>
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between py-2">
-                              <span className="text-muted-foreground">Subtotal</span>
-                              <span className="font-medium">
-                                {values.currency} {totals.subtotal.toFixed(3)}
-                              </span>
+                  {activeTab === 'items' && (
+                    <div className="space-y-6">
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center gap-3">
+                            <div className="bg-primary/10 rounded-lg p-2">
+                              <Package className="text-primary h-5 w-5" />
                             </div>
-                            {totals.discountAmount > 0 && (
-                              <div className="flex items-center justify-between py-2">
-                                <span className="text-muted-foreground">Discount</span>
-                                <span className="text-destructive font-medium">
-                                  - {values.currency} {totals.discountAmount.toFixed(3)}
-                                </span>
+                            <div>
+                              <CardTitle>Quote Items</CardTitle>
+                              <CardDescription>
+                                Add products and services to your quote
+                              </CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <FieldArray name="items">
+                            {(helpers) => (
+                              <div className="space-y-4">
+                                {(values.items as QuoteItem[]).map((item, idx) => {
+                                  const priceErr = getIn(errors, `items.${idx}.unitPrice`);
+                                  const priceTouched = getIn(touched, `items.${idx}.unitPrice`);
+                                  const qtyErr = getIn(errors, `items.${idx}.quantity`);
+                                  const qtyTouched = getIn(touched, `items.${idx}.quantity`);
+                                  const unitErr = getIn(errors, `items.${idx}.unitLabel`);
+                                  const unitTouched = getIn(touched, `items.${idx}.unitLabel`);
+                                  const nameErr = getIn(errors, `items.${idx}.productName`);
+                                  const nameTouched = getIn(touched, `items.${idx}.productName`);
+
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="bg-muted/30 border-border rounded-lg border p-4"
+                                    >
+                                      <div className="grid gap-4 lg:grid-cols-12 lg:items-end">
+                                        <div className="space-y-2 lg:col-span-4">
+                                          <label className="text-sm font-medium">
+                                            Product/Service *
+                                          </label>
+                                          <Field name={`items.${idx}.productName`} type="hidden" />
+                                          <ProductPicker
+                                            index={idx}
+                                            value={(values.items[idx] as any).productName}
+                                            fetchProducts={searchProducts}
+                                            excludeIds={existingIds}
+                                            excludeNames={existingNames}
+                                            onPick={(p) => {
+                                              const exists = (values.items as any[]).some(
+                                                (it, i) =>
+                                                  i !== idx &&
+                                                  ((p._id && it.productId === p._id) ||
+                                                    normalizeName(it.productName) ===
+                                                      normalizeName(p.name)),
+                                              );
+                                              if (exists) {
+                                                {
+                                                  const next: any = { ...(errors as any) };
+                                                  next.items ??= [];
+                                                  next.items[idx] ??= {};
+                                                  next.items[idx].productName =
+                                                    'Duplicate product in quote';
+                                                  setErrors(next);
+                                                }
+                                                focusByPath(`items.${idx}.productName`);
+                                                return;
+                                              }
+                                              setFieldValue(`items.${idx}.productId`, p._id);
+                                              setFieldValue(`items.${idx}.productName`, p.name);
+                                              setFieldValue(
+                                                `items.${idx}.unitPrice`,
+                                                to3(p.defaultPrice),
+                                              );
+                                              setFieldValue(
+                                                `items.${idx}.unitLabel`,
+                                                p.unitLabel || 'pcs',
+                                              );
+                                              setFieldValue(
+                                                `items.${idx}.isTaxable`,
+                                                p.isTaxable ?? true,
+                                              );
+                                            }}
+                                            onCreate={async (name) => {
+                                              const normalized = normalizeName(name);
+                                              const exists = (values.items as any[]).some(
+                                                (it) =>
+                                                  normalizeName(it.productName) === normalized,
+                                              );
+                                              if (exists) {
+                                                {
+                                                  const next: any = { ...(errors as any) };
+                                                  next.items ??= [];
+                                                  next.items[idx] ??= {};
+                                                  next.items[idx].productName =
+                                                    'Duplicate product in quote';
+                                                  setErrors(next);
+                                                }
+                                                focusByPath(`items.${idx}.productName`);
+                                                throw new Error('duplicate-product');
+                                              }
+                                              const res = await fetch('/api/products', {
+                                                method: 'POST',
+                                                headers: { 'content-type': 'application/json' },
+                                                body: JSON.stringify({
+                                                  name,
+                                                  unitLabel:
+                                                    (values.items[idx] as any).unitLabel || 'pcs',
+                                                  defaultPrice:
+                                                    to3((values.items[idx] as any).unitPrice) || 0,
+                                                }),
+                                              });
+                                              if (!res.ok) {
+                                                const data = await res.json().catch(() => ({}));
+                                                throw new Error(
+                                                  data?.error || 'Create product failed',
+                                                );
+                                              }
+                                              const data = await res.json();
+                                              return {
+                                                _id: data.id,
+                                                name,
+                                                unitLabel:
+                                                  (values.items[idx] as any).unitLabel || 'pcs',
+                                                defaultPrice:
+                                                  to3((values.items[idx] as any).unitPrice) || 0,
+                                                isTaxable: true,
+                                              } as ProductDoc;
+                                            }}
+                                          />
+                                          {nameTouched && nameErr && (
+                                            <p className="text-destructive text-sm">{nameErr}</p>
+                                          )}
+                                        </div>
+
+                                        <div className="space-y-2 lg:col-span-2">
+                                          <label className="flex items-center gap-2 text-sm font-medium">
+                                            <DollarSign className="h-4 w-4" />
+                                            Unit Price
+                                          </label>
+                                          <Field name={`items.${idx}.unitPrice`}>
+                                            {({ field }: any) => (
+                                              <input
+                                                {...field}
+                                                type="number"
+                                                inputMode="decimal"
+                                                step="0.001"
+                                                onBlur={(e) => {
+                                                  const v = to3(e.target.value);
+                                                  setFieldValue(`items.${idx}.unitPrice`, v);
+                                                }}
+                                                className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
+                                                  priceTouched && priceErr
+                                                    ? 'border-destructive focus:ring-destructive/50'
+                                                    : 'border-border focus:ring-ring'
+                                                }`}
+                                              />
+                                            )}
+                                          </Field>
+                                          {priceTouched && priceErr && (
+                                            <p className="text-destructive text-sm">
+                                              {String(priceErr)}
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        <div className="space-y-2 lg:col-span-2">
+                                          <label className="text-sm font-medium">Quantity</label>
+                                          <Field name={`items.${idx}.quantity`}>
+                                            {({ field }: any) => (
+                                              <input
+                                                {...field}
+                                                type="number"
+                                                inputMode="decimal"
+                                                step="0.001"
+                                                onBlur={(e) => {
+                                                  const v = to3(e.target.value);
+                                                  setFieldValue(`items.${idx}.quantity`, v);
+                                                }}
+                                                className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
+                                                  qtyTouched && qtyErr
+                                                    ? 'border-destructive focus:ring-destructive/50'
+                                                    : 'border-border focus:ring-ring'
+                                                }`}
+                                              />
+                                            )}
+                                          </Field>
+                                          {qtyTouched && qtyErr && (
+                                            <p className="text-destructive text-sm">
+                                              {String(qtyErr)}
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        <div className="space-y-2 lg:col-span-2">
+                                          <label className="text-sm font-medium">Unit</label>
+                                          <Field name={`items.${idx}.unitLabel`}>
+                                            {({ field }: any) => (
+                                              <input
+                                                {...field}
+                                                className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
+                                                  unitTouched && unitErr
+                                                    ? 'border-destructive focus:ring-destructive/50'
+                                                    : 'border-border focus:ring-ring'
+                                                }`}
+                                                placeholder="pcs, hrs, etc."
+                                              />
+                                            )}
+                                          </Field>
+                                          {unitTouched && unitErr && (
+                                            <p className="text-destructive text-sm">
+                                              {String(unitErr)}
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center justify-center gap-2 pt-6 lg:col-span-1">
+                                          <Field
+                                            type="checkbox"
+                                            name={`items.${idx}.isTaxable`}
+                                            className="text-primary bg-input border-border focus:ring-ring h-4 w-4 rounded focus:ring-2"
+                                          />
+                                          <span className="text-sm font-medium">Taxable</span>
+                                        </div>
+
+                                        <div className="pt-6 lg:col-span-1">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => helpers.remove(idx)}
+                                            className="text-destructive border-destructive/20 hover:bg-destructive/10 w-full"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() =>
+                                    helpers.push({
+                                      productName: '',
+                                      description: '',
+                                      unitPrice: 0,
+                                      quantity: 1,
+                                      unitLabel: 'pcs',
+                                      isTaxable: true,
+                                    })
+                                  }
+                                  className="border-primary/50 text-primary hover:bg-primary/5 w-full border-dashed"
+                                >
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Add Line Item
+                                </Button>
                               </div>
                             )}
-                            <div className="flex items-center justify-between py-2">
-                              <span className="text-muted-foreground">Taxable Base</span>
-                              <span className="font-medium">
-                                {values.currency} {totals.taxableBase.toFixed(3)}
-                              </span>
+                          </FieldArray>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center gap-3">
+                            <div className="bg-primary/10 rounded-lg p-2">
+                              <Calculator className="text-primary h-5 w-5" />
                             </div>
-                            <div className="flex items-center justify-between py-2">
-                              <span className="text-muted-foreground">
-                                VAT ({values.vatPercent}%)
-                              </span>
-                              <span className="font-medium">
-                                {values.currency} {totals.vatAmount.toFixed(3)}
-                              </span>
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between pt-2">
-                              <span className="text-lg font-semibold">Grand Total</span>
-                              <span className="text-primary text-2xl font-bold">
-                                {values.currency} {totals.grandTotal.toFixed(3)}
-                              </span>
+                            <div>
+                              <CardTitle>Quote Configuration</CardTitle>
+                              <CardDescription>
+                                Set currency, tax rates, and discounts
+                              </CardDescription>
                             </div>
                           </div>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                          <div className="grid gap-4 md:grid-cols-4">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Currency</label>
+                              <Field
+                                as="select"
+                                name="currency"
+                                className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                              >
+                                {['BHD', 'USD', 'EUR', 'INR', 'AED'].map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
+                              </Field>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm font-medium">
+                                <Percent className="h-4 w-4" />
+                                VAT Rate (%)
+                              </label>
+                              <Field name="vatPercent">
+                                {({ field }: any) => (
+                                  <input
+                                    {...field}
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.001"
+                                    min="0"
+                                    onBlur={(e) => setFieldValue('vatPercent', to3(e.target.value))}
+                                    className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
+                                      getIn(touched, 'vatPercent') && getIn(errors, 'vatPercent')
+                                        ? 'border-destructive focus:ring-destructive/50'
+                                        : 'border-border focus:ring-ring'
+                                    }`}
+                                  />
+                                )}
+                              </Field>
+                              <ErrorMessage
+                                name="vatPercent"
+                                component="p"
+                                className="text-destructive text-sm"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Discount Type</label>
+                              <Field
+                                as="select"
+                                name="discount.type"
+                                className="bg-input border-border focus:ring-ring w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                              >
+                                <option value="none">No Discount</option>
+                                <option value="percent">Percentage</option>
+                                <option value="amount">Fixed Amount</option>
+                              </Field>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Discount Value</label>
+                              <Field name="discount.value">
+                                {({ field }: any) => (
+                                  <input
+                                    {...field}
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.001"
+                                    min="0"
+                                    onBlur={(e) =>
+                                      setFieldValue('discount.value', to3(e.target.value))
+                                    }
+                                    className={`bg-input w-full rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2 ${
+                                      getIn(touched, 'discount.value') &&
+                                      getIn(errors, 'discount.value')
+                                        ? 'border-destructive focus:ring-destructive/50'
+                                        : 'border-border focus:ring-ring'
+                                    }`}
+                                  />
+                                )}
+                              </Field>
+                              <ErrorMessage
+                                name="discount.value"
+                                component="p"
+                                className="text-destructive text-sm"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-muted/50 border-border rounded-lg border p-6">
+                            <h3 className="mb-4 text-lg font-semibold">Quote Summary</h3>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between py-2">
+                                <span className="text-muted-foreground">Subtotal</span>
+                                <span className="font-medium">
+                                  {values.currency} {totals.subtotal.toFixed(3)}
+                                </span>
+                              </div>
+                              {totals.discountAmount > 0 && (
+                                <div className="flex items-center justify-between py-2">
+                                  <span className="text-muted-foreground">Discount</span>
+                                  <span className="text-destructive font-medium">
+                                    - {values.currency} {totals.discountAmount.toFixed(3)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between py-2">
+                                <span className="text-muted-foreground">Taxable Base</span>
+                                <span className="font-medium">
+                                  {values.currency} {totals.taxableBase.toFixed(3)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between py-2">
+                                <span className="text-muted-foreground">
+                                  VAT ({values.vatPercent}%)
+                                </span>
+                                <span className="font-medium">
+                                  {values.currency} {totals.vatAmount.toFixed(3)}
+                                </span>
+                              </div>
+                              <Separator />
+                              <div className="flex items-center justify-between pt-2">
+                                <span className="text-lg font-semibold">Grand Total</span>
+                                <span className="text-primary text-2xl font-bold">
+                                  {values.currency} {totals.grandTotal.toFixed(3)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center gap-3">
+                            <div className="bg-primary/10 rounded-lg p-2">
+                              <FileText className="text-primary h-5 w-5" />
+                            </div>
+                            <div>
+                              <CardTitle>Additional Notes</CardTitle>
+                              <CardDescription>
+                                Add terms, conditions, or special instructions
+                              </CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <Field name="notes">
+                            {({ field }: any) => (
+                              <textarea
+                                {...field}
+                                rows={4}
+                                className="bg-input border-border focus:ring-ring w-full resize-none rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
+                                placeholder="Enter any additional notes, terms, or conditions for this quote..."
+                              />
+                            )}
+                          </Field>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </div>
+
+                {/* ===== Bottom sticky actions with explicit error list ===== */}
+                <div className="bg-background/95 border-border sticky bottom-0 rounded-t-lg border-t p-6 backdrop-blur-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        onClick={() => handlePreview(values, initial)}
+                        disabled={saving || finalizing || previewLoading || !localCanDraft}
+                        variant="outline"
+                        className="text-primary hover:text-primary hover:bg-primary/5 border-primary/50"
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        {previewLoading ? 'Preparing Preview...' : 'Preview Draft'}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={draftAndExit}
+                        disabled={!localCanDraft || saving}
+                        variant="outline"
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        {saving ? 'Saving...' : 'Save Draft'}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        onClick={handleFinalize}
+                        disabled={finalizing || !canFinalizeVisual}
+                        className="bg-primary hover:bg-primary/90"
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        {finalizing ? 'Finalizing...' : 'Finalize Quote'}
+                      </Button>
+                    </div>
+
+                    {/* Concrete error summaries (first 5) */}
+                    <div className="flex-1">
+                      {Object.keys(errors).length > 0 ? (
+                        <div className="bg-destructive/10 text-destructive border-destructive/30 max-h-28 overflow-auto rounded-lg border px-3 py-2 text-sm">
+                          <ul className="list-disc pl-5">
+                            {flattenErrors(errors)
+                              .filter(Boolean)
+                              .slice(0, 8)
+                              .map((msg, i) => (
+                                <li key={i}>{String(msg)}</li>
+                              ))}
+                          </ul>
                         </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <div className="flex items-center gap-3">
-                          <div className="bg-primary/10 rounded-lg p-2">
-                            <FileText className="text-primary h-5 w-5" />
-                          </div>
-                          <div>
-                            <CardTitle>Additional Notes</CardTitle>
-                            <CardDescription>
-                              Add terms, conditions, or special instructions
-                            </CardDescription>
-                          </div>
+                      ) : canFinalizeVisual ? (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default" className="bg-success">
+                            Ready to finalize
+                          </Badge>
                         </div>
-                      </CardHeader>
-                      <CardContent>
-                        <Field name="notes">
-                          {({ field }: any) => (
-                            <textarea
-                              {...field}
-                              rows={4}
-                              className="bg-input border-border focus:ring-ring w-full resize-none rounded-lg border px-3 py-2 transition-all focus:border-transparent focus:ring-2"
-                              placeholder="Enter any additional notes, terms, or conditions for this quote..."
-                            />
-                          )}
-                        </Field>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-              </div>
-
-              {/* ===== Bottom sticky actions with explicit error list ===== */}
-              <div className="bg-background/95 border-border sticky bottom-0 rounded-t-lg border-t p-6 backdrop-blur-sm">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      type="button"
-                      onClick={draftAndExit}
-                      disabled={!canDraft || saving}
-                      variant="outline"
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      {saving ? 'Saving...' : 'Save Draft'}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      onClick={handleFinalize}
-                      disabled={finalizing || !canFinalizeVisual}
-                      className="bg-primary hover:bg-primary/90"
-                    >
-                      <Check className="mr-2 h-4 w-4" />
-                      {finalizing ? 'Finalizing...' : 'Finalize Quote'}
-                    </Button>
-                  </div>
-
-                  {/* Concrete error summaries (first 5) */}
-                  <div className="flex-1">
-                    {Object.keys(errors).length > 0 ? (
-                      <div className="bg-destructive/10 text-destructive border-destructive/30 max-h-28 overflow-auto rounded-lg border px-3 py-2 text-sm">
-                        <ul className="list-disc pl-5">
-                          {flattenErrors(errors)
-                            .filter(Boolean)
-                            .slice(0, 8)
-                            .map((msg, i) => (
-                              <li key={i}>{String(msg)}</li>
-                            ))}
-                        </ul>
-                      </div>
-                    ) : canFinalizeVisual ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="default" className="bg-success">
-                          Ready to finalize
-                        </Badge>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Form>
+              </Form>
+
+              {/* PDF Preview Dialog (New Component) */}
+              <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+                <DialogContent className="max-h-[90vh] max-w-4xl p-0" showCloseButton={false}>
+                  <DialogHeader className="border-b p-4">
+                    <DialogTitle className="text-lg">Draft Quote Preview</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex-1 overflow-hidden p-0">
+                    {pdfPreviewUrl ? (
+                      <div className="aspect-[1/1.414] w-full">
+                        {/* Use an iframe to embed the PDF endpoint */}
+                        <iframe
+                          src={pdfPreviewUrl}
+                          className="h-full w-full border-0"
+                          title="Draft Quote Preview"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center p-12">
+                        <Skeleton className="h-96 w-full" />
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
           );
         }}
       </Formik>
