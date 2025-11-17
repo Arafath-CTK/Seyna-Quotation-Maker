@@ -168,11 +168,17 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote, isDraft }) => {
   const ccy = company.currency || quote.currency || 'BHD';
   const vatPercent = Math.round((company.vatRate || quote.vatRate || 0) * 100 * 1000) / 1000;
 
+  // const m = {
+  //   top: quote?.settings?.letterhead?.margins?.top ?? 120,
+  //   right: quote?.settings?.letterhead?.margins?.right ?? 32,
+  //   bottom: quote?.settings?.letterhead?.margins?.bottom ?? 100,
+  //   left: quote?.settings?.letterhead?.margins?.left ?? 32,
+  // };
   const m = {
-    top: quote?.settings?.letterhead?.margins?.top ?? 120,
-    right: quote?.settings?.letterhead?.margins?.right ?? 32,
-    bottom: quote?.settings?.letterhead?.margins?.bottom ?? 100,
-    left: quote?.settings?.letterhead?.margins?.left ?? 32,
+    top: 28,
+    right: 32,
+    bottom: 28,
+    left: 32,
   };
 
   return (
@@ -190,19 +196,19 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote, isDraft }) => {
         ]}
         wrap
       >
-        <Image src={letterheadBase64} style={styles.bgLetterhead} fixed />
+        {/* <Image src={letterheadBase64} style={styles.bgLetterhead} fixed /> */}
 
         <View style={styles.header} fixed>
           <View style={styles.titleBlock}>
             <Text style={styles.title}>Quotation</Text>
-            <Text style={styles.meta}>
+            {/* <Text style={styles.meta}>
               {quote.quoteNumber ? `# ${quote.quoteNumber}` : ''}
               {quote.issueDate ? ` • ${new Date(quote.issueDate).toLocaleDateString()}` : ''}
-            </Text>
+            </Text> */}
           </View>
         </View>
 
-        <View style={styles.twoCol}>
+        {/* <View style={styles.twoCol}>
           <View style={styles.col}>
             <Text style={styles.label}>Bill To</Text>
             <View style={styles.box}>
@@ -215,7 +221,7 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote, isDraft }) => {
               {customer.phone ? <Text>{customer.phone}</Text> : null}
             </View>
           </View>
-        </View>
+        </View> */}
 
         <View style={styles.table}>
           <View style={styles.thead}>
