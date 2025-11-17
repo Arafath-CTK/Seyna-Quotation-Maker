@@ -1,3 +1,4 @@
+// src/pdf/QuotePdf.tsx
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 import fs from 'fs';
@@ -54,6 +55,7 @@ const styles = StyleSheet.create({
     border: '1px solid #E5E7EB',
     borderRadius: 4,
     minHeight: 40,
+    color: '#0f172a',
   },
   table: {
     width: '100%',
@@ -111,15 +113,47 @@ const styles = StyleSheet.create({
     borderTop: '1px solid #E5E7EB',
     paddingTop: 6,
   },
+
+  /* watermark - tuned to stay centered and not wrap */
+  watermarkWrap: {
+    position: 'absolute',
+    top: A4.height / 2 - 40,
+    left: -220,
+    width: A4.width + 440,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: 'rotate(-45deg)',
+  },
+
+  watermarkLine: {
+    fontSize: 72,
+    fontWeight: 700,
+    color: '#0b1220',
+    opacity: 0.08,
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+
+  watermarkLineSmall: {
+    fontSize: 28,
+    fontWeight: 600,
+    color: '#0b1220',
+    opacity: 0.1,
+    textAlign: 'center',
+    marginTop: 6,
+    letterSpacing: 3,
+  },
 });
 
 type QuotePdfProps = {
   quote: any;
+  isDraft: boolean;
 };
 
 const currency = (v: number, ccy: string) => `${ccy} ${Number(v || 0).toFixed(3)}`;
 
-const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
+const QuotePdf: React.FC<QuotePdfProps> = ({ quote, isDraft }) => {
   const company = quote.companySnapshot || {};
   const customer = quote.customerSnapshot || quote.customer || {};
   const items = quote.items || [];
@@ -134,10 +168,6 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
   const ccy = company.currency || quote.currency || 'BHD';
   const vatPercent = Math.round((company.vatRate || quote.vatRate || 0) * 100 * 1000) / 1000;
 
-  const letterheadUrl =
-    quote?.settings?.letterhead?.url || quote?.letterhead?.url || company?.letterheadUrl || '';
-
-  // ✅ Use margins from settings (and default to a good baseline)
   const m = {
     top: quote?.settings?.letterhead?.margins?.top ?? 120,
     right: quote?.settings?.letterhead?.margins?.right ?? 32,
@@ -160,28 +190,18 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
         ]}
         wrap
       >
-        {/* ✅ Full-page letterhead background on every page */}
         <Image src={letterheadBase64} style={styles.bgLetterhead} fixed />
 
-        {/* Header */}
-        <View
-          style={{ marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between' }}
-          fixed
-        >
-          <View style={{ flexGrow: 1 }}>
-            <Text style={{ fontSize: 20, fontWeight: 700 }}>Quotation</Text>
-            <Text style={{ marginTop: 4, color: '#555' }}>
-              {quote.quoteNumber ? `# ${quote.quoteNumber} ` : ''}
-              {quote.issueDate ? `• ${new Date(quote.issueDate).toLocaleDateString()}` : ''}
+        <View style={styles.header} fixed>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>Quotation</Text>
+            <Text style={styles.meta}>
+              {quote.quoteNumber ? `# ${quote.quoteNumber}` : ''}
+              {quote.issueDate ? ` • ${new Date(quote.issueDate).toLocaleDateString()}` : ''}
             </Text>
           </View>
-
-          {/* {company.letterheadUrl ? (
-            <Image src={company.letterheadUrl} style={styles.letterhead} />
-          ) : null} */}
         </View>
 
-        {/* Parties */}
         <View style={styles.twoCol}>
           <View style={styles.col}>
             <Text style={styles.label}>Bill To</Text>
@@ -197,7 +217,6 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
           </View>
         </View>
 
-        {/* Items Table */}
         <View style={styles.table}>
           <View style={styles.thead}>
             <Text style={[styles.th, { flex: 5 }]}>Product / Service</Text>
@@ -231,7 +250,6 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
           </View>
         </View>
 
-        {/* Totals */}
         <View style={styles.totals}>
           <View style={styles.totalsRow}>
             <Text>Subtotal</Text>
@@ -243,6 +261,7 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
               <Text>- {currency(totals.discountAmount, ccy)}</Text>
             </View>
           ) : null}
+
           <View style={styles.totalsRow}>
             <Text>Taxable Base</Text>
             <Text>{currency(totals.taxableBase, ccy)}</Text>
@@ -260,7 +279,6 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
           </View>
         </View>
 
-        {/* Notes */}
         {quote.notes ? (
           <View style={{ marginTop: 12 }}>
             <Text style={styles.label}>Notes</Text>
@@ -268,12 +286,19 @@ const QuotePdf: React.FC<QuotePdfProps> = ({ quote }) => {
           </View>
         ) : null}
 
-        {/* Footer */}
         {company.footerText ? (
           <View style={styles.footer} fixed>
             <Text>{company.footerText}</Text>
           </View>
         ) : null}
+
+        {/* WATERMARK - rendered last so it appears on top of everything */}
+        {isDraft && (
+          <View style={styles.watermarkWrap} fixed>
+            <Text style={styles.watermarkLine}>DRAFT PREVIEW</Text>
+            <Text style={styles.watermarkLineSmall}>— DO NOT USE —</Text>
+          </View>
+        )}
       </Page>
     </Document>
   );

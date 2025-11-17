@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Download, Edit, Eye, Plus } from 'lucide-react';
+import { Download, Edit, Eye, Plus, X } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -196,25 +196,34 @@ export default function HistoryClient() {
         </CardContent>
       </Card>
 
-      {/* PDF Preview Dialog (Modal) - New Component */}
+      {/* PDF Preview Dialog (Modal) */}
       <Dialog open={!!previewId} onOpenChange={handleClosePreview}>
-        <DialogContent className="max-h-[90vh] max-w-4xl p-0" showCloseButton={false}>
-          <DialogHeader className="border-b p-4">
-            <DialogTitle className="text-lg">
-              {previewStatus === 'draft' ? 'Draft Quote Preview' : 'Finalized Quote Preview'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden p-0">
-            {pdfUrl ? (
-              <div className="aspect-[1/1.414] w-full">
-                {/* Use an iframe to embed the PDF endpoint */}
-                <iframe src={pdfUrl} className="h-full w-full border-0" title="Quote PDF Preview" />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center p-12">
-                <Skeleton className="h-96 w-full" />
-              </div>
-            )}
+        <DialogContent className="flex items-center justify-center p-0" showCloseButton={false}>
+          <div className="w-full max-w-4xl overflow-hidden rounded-lg">
+            <DialogHeader className="flex flex-row items-center justify-between border-b p-4">
+              <DialogTitle className="flex-1 text-left text-lg">
+                {previewStatus === 'draft' ? 'Draft Quote Preview' : 'Finalized Quote Preview'}
+              </DialogTitle>
+
+              <button
+                onClick={handleClosePreview}
+                aria-label="Close preview"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/20 ml-4 rounded-md p-2 transition"
+                title="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </DialogHeader>
+
+            {/* Content: PDF iframe */}
+            <div className="w-full bg-white">
+              <iframe
+                src={pdfUrl}
+                title="Quote PDF Preview"
+                className="block w-full border-0"
+                style={{ height: '80vh' }}
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>
