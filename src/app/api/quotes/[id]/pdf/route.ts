@@ -1,10 +1,11 @@
+// src/app/api/quotes/[id]/pdf/route.ts
 import React from 'react';
 import { getCollection } from '@/lib/mongodb';
 import { toObjectId } from '@/lib/ids';
 import { QuoteDocSchema } from '@/lib/quote-schemas';
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
 import QuotePdf from '@/pdf/QuotePdf';
-import { computeTotals } from '@/lib/totals'; // Import computeTotals
+import { computeTotals } from '@/lib/totals';
 
 export const runtime = 'nodejs';
 
@@ -96,12 +97,19 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const parsed = QuoteDocSchema.parse({
       ...finalDoc,
       _id: finalDoc._id.toString(),
+      // Ensure dates are correctly parsed for zod, important for draft fallback
       createdAt:
         finalDoc.createdAt instanceof Date ? finalDoc.createdAt : new Date(finalDoc.createdAt),
+      // Only include issueDate if it exists or if it was mocked for a draft preview
+      ...(finalDoc.issueDate && {
+        issueDate:
+          finalDoc.issueDate instanceof Date ? finalDoc.issueDate : new Date(finalDoc.issueDate),
+      }),
     });
 
     const element = React.createElement(QuotePdf, {
       quote: parsed,
+      isDraft: isDraftPreview, // <-- PASS THE DRAFT FLAG
     }) as React.ReactElement<DocumentProps>;
     const nodeBuffer = await renderToBuffer(element);
     const body = new Uint8Array(nodeBuffer);

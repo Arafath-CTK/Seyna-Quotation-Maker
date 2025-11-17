@@ -23,7 +23,8 @@ import {
   Hash,
   DollarSign,
   Percent,
-  Eye, // Added Eye for preview
+  Eye,
+  X, // Added Eye for preview
 } from 'lucide-react';
 import {
   Dialog, // Added Dialog
@@ -1270,27 +1271,37 @@ export default function ComposerClient({ initialId }: { initialId?: string }) {
                 </div>
               </Form>
 
-              {/* PDF Preview Dialog (New Component) */}
+              {/* PDF Preview Dialog */}
               <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-                <DialogContent className="max-h-[90vh] max-w-4xl p-0" showCloseButton={false}>
-                  <DialogHeader className="border-b p-4">
-                    <DialogTitle className="text-lg">Draft Quote Preview</DialogTitle>
-                  </DialogHeader>
-                  <div className="flex-1 overflow-hidden p-0">
-                    {pdfPreviewUrl ? (
-                      <div className="aspect-[1/1.414] w-full">
-                        {/* Use an iframe to embed the PDF endpoint */}
-                        <iframe
-                          src={pdfPreviewUrl}
-                          className="h-full w-full border-0"
-                          title="Draft Quote Preview"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center p-12">
-                        <Skeleton className="h-96 w-full" />
-                      </div>
-                    )}
+                <DialogContent
+                  className="flex items-center justify-center p-0"
+                  showCloseButton={false}
+                >
+                  <div className="w-full max-w-4xl overflow-hidden rounded-lg">
+                    <DialogHeader className="flex flex-row items-center justify-between border-b p-4">
+                      <DialogTitle className="flex-1 text-left text-lg">
+                        Draft Quote Preview
+                      </DialogTitle>
+
+                      <button
+                        onClick={() => setPreviewOpen(false)}
+                        aria-label="Close preview"
+                        className="text-muted-foreground hover:text-foreground hover:bg-muted/20 ml-4 rounded-md p-2 transition"
+                        title="Close"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </DialogHeader>
+
+                    {/* iframe container */}
+                    <div className="w-full bg-white">
+                      <iframe
+                        src={pdfPreviewUrl}
+                        title="Draft Quote Preview"
+                        className="block w-full border-0"
+                        style={{ height: '80vh' }}
+                      />
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
